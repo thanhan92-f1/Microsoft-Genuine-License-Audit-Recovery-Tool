@@ -18,7 +18,7 @@ PORT = int(os.environ.get("PORT", 8888))
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 DEFAULT_SCRIPT = "Windows_License_Cleanup.ps1"
-DOMAIN = "irm-genuine-license-windows.hitechcloud.vn"
+DOMAIN = os.environ.get("DOMAIN", "irm-genuine-license-windows.hitechcloud.vn")
 
 # ============================================================
 #  REQUEST HANDLER

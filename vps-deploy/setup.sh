@@ -32,6 +32,46 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ============================================================
+#  BUOC 0: CAU HINH HE THONG
+# ============================================================
+echo -e "  ${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "  ${CYAN}║${NC}  ${YELLOW}BUOC 0: CAU HINH HE THONG${NC}"
+echo -e "  ${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "  ${CYAN}Nhan Enter de su dung gia tri mac dinh (dang trong ngoac).${NC}"
+echo ""
+
+# Nhap domain
+read -p "  Domain [${DOMAIN}]: " input_domain
+DOMAIN="${input_domain:-$DOMAIN}"
+
+# Nhap port
+read -p "  Port phuc vu [${PORT}]: " input_port
+PORT="${input_port:-$PORT}"
+
+# Nhap thu muc cai dat
+read -p "  Thu muc cai dat [${INSTALL_DIR}]: " input_dir
+INSTALL_DIR="${input_dir:-$INSTALL_DIR}"
+
+echo ""
+echo -e "  ${CYAN}── Cau hinh cua ban ──────────────────────────────────────${NC}"
+echo -e "  Domain:      ${GREEN}$DOMAIN${NC}"
+echo -e "  Port:        ${GREEN}$PORT${NC}"
+echo -e "  Thu muc:     ${GREEN}$INSTALL_DIR${NC}"
+echo -e "  ${CYAN}────────────────────────────────────────────────────────────${NC}"
+echo ""
+
+read -p "  Xac nhan cau hinh? [Y/n]: " confirm
+confirm="${confirm:-y}"
+if [[ ! "$confirm" =~ ^[Yy] ]]; then
+    echo -e "  ${RED}Da huy. Chay lai script de cau hinh lai.${NC}"
+    exit 0
+fi
+
+# Cap nhat DOMAIN vao server.py sau khi download
+# (se lam o buoc download scripts)
+
 # Buoc 1: Cai dat dependencies
 echo -e "  ${YELLOW}[1/5] Kiem tra Python...${NC}"
 if ! command -v python3 &> /dev/null; then
@@ -68,6 +108,13 @@ mkdir -p "$INSTALL_DIR/templates"
 curl -sSL "$REPO_RAW/vps-deploy/templates/index.html" -o "$INSTALL_DIR/templates/index.html"
 echo -e "        ${GREEN}[OK] Da tai: index.html${NC}"
 
+# Cap nhat DOMAIN trong server.py va index.html
+echo -e "  ${YELLOW}  Cap nhat domain: $DOMAIN${NC}"
+sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/server.py" 2>/dev/null
+sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/templates/index.html" 2>/dev/null
+sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/scripts/Windows_License_Cleanup.ps1" 2>/dev/null
+echo -e "        ${GREEN}[OK] Da cap nhat domain trong tat ca scripts${NC}"
+
 # Download HUONG_DAN_SU_DUNG_IRM.txt
 curl -sSL "$REPO_RAW/HUONG_DAN_SU_DUNG_IRM.txt" -o "$INSTALL_DIR/HUONG_DAN_SU_DUNG_IRM.txt" 2>/dev/null || true
 
@@ -86,7 +133,7 @@ fi
 # Buoc 5: Tao systemd service
 echo -e "  ${YELLOW}[5/5] Tao systemd service...${NC}"
 
-cat > /etc/systemd/system/pho-tue-scripts.service << EOF
+cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Pho Tue Script Server - Windows License Cleanup
 After=network.target
@@ -98,6 +145,7 @@ ExecStart=/usr/bin/python3 $INSTALL_DIR/server.py
 Restart=always
 RestartSec=5
 Environment=PORT=$PORT
+Environment=DOMAIN=$DOMAIN
 StandardOutput=journal
 StandardError=journal
 
