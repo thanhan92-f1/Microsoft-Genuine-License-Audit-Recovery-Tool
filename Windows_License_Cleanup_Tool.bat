@@ -5,7 +5,7 @@ color 0A
 
 :: ============================================================
 ::  TOOL GỠ BỎ LICENSE WINDOWS LẬU & CHUẨN HÓA HỆ THỐNG
-::  Công ty: Pho Tue SoftWare Solutions JSC
+::  Công ty: CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ
 ::  Phiên bản: 1.0
 ::  Ngày: 2026-06-25
 :: ============================================================

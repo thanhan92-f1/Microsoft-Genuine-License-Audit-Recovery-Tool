@@ -6,7 +6,8 @@
     Quet va xoa cac cong cu crack KMS, AutoKMS, KMSpico...
     Phuc vu phong may Cyber Game, PC ca nhan, doanh nghiep.
 .AUTHOR
-    Pho Tue SoftWare Solutions JSC
+    Pho Tue SoftWare And Technology Solutions Joint Stock Company
+
 .VERSION
     1.0
 .NOTES
@@ -340,7 +341,60 @@ function Show-LicenseStatus {
     & cscript.exe //NoLogo "$env:SystemRoot\System32\slmgr.vbs" /xpr
     Write-Host ""
 }
+function Activate-NewLicense {
+    Write-Header "NHAP & KICH HOAT KEY BAN QUYEN MOI"
 
+    # Nhap key
+    Write-Host "  Nhap Product Key (dang: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)" -ForegroundColor Cyan
+    Write-Host "  Hoac nhan Enter de bo qua" -ForegroundColor DarkGray
+    Write-Host ""
+    $newKey = Read-Host "  Product Key"
+
+    if ([string]::IsNullOrWhiteSpace($newKey)) {
+        Write-Host "  [!] Khong co key nao duoc nhap." -ForegroundColor Yellow
+        return
+    }
+
+    # Kiem tra dinh dang key (co gach ngang hoac khong)
+    $cleanKey = $newKey.Trim() -replace '\s+', ''
+
+    Write-Host ""
+    Write-Step "1/3" "Dang nhap Product Key moi..."
+    try {
+        $process = Start-Process -FilePath "cscript.exe" -ArgumentList "//NoLogo", "$env:SystemRoot\System32\slmgr.vbs", "/ipk", $cleanKey -Wait -PassThru -WindowStyle Hidden
+        if ($process.ExitCode -eq 0) {
+            Write-Step "OK" "Nhap Product Key thanh cong!" "OK"
+        } else {
+            Write-Step "!" "Key khong hop le hoac loi." "ERROR"
+            Write-Host ""
+            Write-Host "  Kiem tra lai key va thu lai." -ForegroundColor Yellow
+            return
+        }
+    } catch {
+        Write-Step "!" "Loi khi nhap key: $_" "ERROR"
+        return
+    }
+
+    Write-Host ""
+    Write-Step "2/3" "Dang kich hoat Windows voi Microsoft..."
+    try {
+        $process = Start-Process -FilePath "cscript.exe" -ArgumentList "//NoLogo", "$env:SystemRoot\System32\slmgr.vbs", "/ato" -Wait -PassThru -WindowStyle Hidden
+        if ($process.ExitCode -eq 0) {
+            Write-Step "OK" "Kich hoat thanh cong!" "OK"
+        } else {
+            Write-Step "!" "Kich hoat that bai. Hay kiem tra ket noi mang va key." "WARN"
+        }
+    } catch {
+        Write-Step "!" "Loi khi kich hoat: $_" "ERROR"
+    }
+
+    Write-Host ""
+    Write-Step "3/3" "Kiem tra trang thai sau kich hoat..."
+    Write-Host ""
+    & cscript //NoLogo "$env:SystemRoot\System32\slmgr.vbs" /xpr
+    Write-Host ""
+    Write-Host "  Nhat ky: $LogFile" -ForegroundColor DarkGray
+}
 function Invoke-FullCleanup {
     Write-Header "BAT DAU QUY TRINH CHUAN HOA HE THONG TOAN DIEN"
     Write-Log "=== BAT DAU CHUAN HOA HE THONG ==="
@@ -435,12 +489,13 @@ function Show-Menu {
         Write-Host "     [6] Don dep Scheduled Tasks lien quan KMS" -ForegroundColor White
         Write-Host "     [7] Sua file Hosts (xoa block Microsoft)" -ForegroundColor White
         Write-Host "     [8] Kiem tra trang thai License hien tai" -ForegroundColor White
-        Write-Host "     [9] Thoat" -ForegroundColor Red
+        Write-Host "     [9] Nhap & kich hoat key ban quyen moi" -ForegroundColor Green
+        Write-Host "     [0] Thoat" -ForegroundColor Red
         Write-Host ""
         Write-Host "  $('=' * 63)" -ForegroundColor Green
         Write-Host ""
 
-        $choice = Read-Host "  Chon chuc nang [1-9]"
+        $choice = Read-Host "  Chon chuc nang [0-9]"
 
         switch ($choice) {
             "1" { Invoke-FullCleanup }
@@ -451,7 +506,8 @@ function Show-Menu {
             "6" { Write-Header "DON DEP SCHEDULED TASKS"; Remove-KMSScheduledTasks }
             "7" { Write-Header "SUA FILE HOSTS"; Repair-HostsFile }
             "8" { Show-LicenseStatus }
-            "9" { $continue = $false }
+            "9" { Activate-NewLicense }
+            "0" { $continue = $false }
             default { Write-Host "  [!] Lua chon khong hop le." -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
 
@@ -464,7 +520,7 @@ function Show-Menu {
     Write-Host ""
     Write-Host "  $('=' * 60)" -ForegroundColor Cyan
     Write-Host "   Cam on ban da su dung Tool!" -ForegroundColor White
-    Write-Host "   Pho Tue SoftWare Solutions JSC" -ForegroundColor DarkGray
+    Write-Host "   HiTechCloud by Pho Tue SoftWare Solutions JSC" -ForegroundColor DarkGray
     Write-Host "   Hotline: 0865.920.041" -ForegroundColor DarkGray
     Write-Host "   Email: info@photuesoftware.com" -ForegroundColor DarkGray
     Write-Host "  $('=' * 60)" -ForegroundColor Cyan

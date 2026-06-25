@@ -2,7 +2,7 @@
 
 > **Công cụ chuẩn hóa bản quyền Windows** - Gỡ bỏ license lậu (KMS, AutoKMS, KMSpico...) và khôi phục Windows nguyên bản.
 
-**Pho Tue SoftWare Solutions JSC**
+**CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ**
 
 ---
 
@@ -89,12 +89,15 @@ Client (Máy trạm)                    VPS (Server)
 
 ## 📞 Liên hệ
 
-**Pho Tue SoftWare Solutions JSC**
+**CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ**
 
 - 🌐 Website: [photuesoftware.com](https://photuesoftware.com)
+- 🌐 Website: [hitechcloud.vn](https://hitechcloud.vn)
+
 - 📧 Email: info@photuesoftware.com
 - ☎️ Hotline: 0865.920.041
-- 📍 Địa chỉ: Căn hộ OT03, Tòa nhà The Landmark 81, 720A Đ. Điện Biên Phủ, TP.HCM
+- 📍 Địa chỉ: 128 Đường Bình Mỹ, xã Bình Mỹ, Thành phố Hồ Chí Minh, Việt Nam
+- 📍 Văn phòng làm việc Q. Bình Thạnh: Căn hộ OT03, Tòa nhà The Landmark 81, 720A Đ. Điện Biên Phủ, Vinhomes Tân Cảng, P. Thạnh Mỹ Tây, Tp. Hồ Chí Minh
 
 ---
 
