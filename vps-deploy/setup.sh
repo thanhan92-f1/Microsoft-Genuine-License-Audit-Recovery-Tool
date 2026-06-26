@@ -422,5 +422,19 @@ fi
 echo -e "  Scripts:    ${INSTALL_DIR}/scripts/"
 echo -e "  Templates:  ${INSTALL_DIR}/templates/"
 echo ""
+echo -e "  ${CYAN}── Cap nhat ─────────────────────────────────────────────────${NC}"
+echo -e "  ${GREEN}curl -sSL https://raw.githubusercontent.com/thanhan92-f1/Windows-Genuine-License-Tool/main/vps-deploy/update.sh | sudo bash${NC}"
+echo ""
+
+# Tao alias de cap nhat nhanh hon
+cat > /usr/local/bin/pho-tue-update << 'ALIAS'
+#!/bin/bash
+curl -sSL "https://raw.githubusercontent.com/thanhan92-f1/Windows-Genuine-License-Tool/main/vps-deploy/update.sh" | sudo bash
+ALIAS
+chmod +x /usr/local/bin/pho-tue-update 2>/dev/null || true
+echo -e "  ${GREEN}[OK] Da tao lenh nhanh: pho-tue-update${NC}"
+echo -e "  ${CYAN}  Lan sau chi can chay: ${WHITE}pho-tue-update${NC}"
+echo ""
+
 echo -e "  ${GREEN}══════════════════════════════════════════════════════════════${NC}"
 echo ""

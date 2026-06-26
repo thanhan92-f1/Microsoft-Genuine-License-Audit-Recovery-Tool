@@ -88,6 +88,22 @@ systemctl stop pho-tue-scripts         # Dừng service
 journalctl -u pho-tue-scripts -f       # Xem log realtime
 ```
 
+### Cập nhật (1 lệnh duy nhất)
+
+Khi có phiên bản mới, SSH vào VPS chạy:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/thanhan92-f1/Windows-Genuine-License-Tool/main/vps-deploy/update.sh | sudo bash
+```
+
+Script sẽ tự động:
+- ✅ Backup phiên bản hiện tại
+- ✅ Download phiên bản mới nhất từ GitHub
+- ✅ Cập nhật domain
+- ✅ Restart service
+- ✅ Kiểm tra kết quả
+- ✅ Xóa backup cũ (giữ 5 bản gần nhất)
+
 ---
 
 ## 📡 Cách hoạt động
