@@ -592,7 +592,7 @@ echo  ════════════════════════�
 echo   Cam on ban da su dung Tool!
 echo   Pho Tue SoftWare Solutions JSC
 echo   Hotline: 0865.920.041
-echo   Email: info@photuesoftware.com
+echo   Email: info@hitechcloud.vn
 echo  ═══════════════════════════════════════════════════════════
 echo.
 timeout /t 3 >nul

@@ -2141,7 +2141,7 @@ $(if ($r.Issues.Count -gt 0) {
         <div class="footer">
             <p><strong>PHO TUE SOFTWARE SOLUTIONS JSC</strong></p>
             <p>HiTechCloud - Microsoft Partner</p>
-            <p>Website: <a href="https://photuesoftware.com">photuesoftware.com</a> | <a href="https://hitechcloud.vn">hitechcloud.vn</a></p>
+            <p>Website: <a href="https://hitechcloud.vn">hitechcloud.vn</a> | <a href="https://hitechcloud.vn">hitechcloud.vn</a></p>
             <p style="margin-top:10px; font-size:0.8em;">Microsoft Genuine License Audit & Recovery Tool v$($r.ToolVersion) | Generated: $($r.AuditDate)</p>
         </div>
     </div>
@@ -7090,11 +7090,11 @@ function Show-Menu {
         Write-Host ""
         Write-Host "  ╔$topBot╗" -Fore Cyan
         Write-Host "  ║" -Fore Cyan -NoNewline
-        Write-Host "  MICROSOFT LICENSE & SYSTEM RECOVERY TOOLKIT v$Script:Version" -Fore White -NoNewline
+        Write-Host "  MICROSOFT GENUINE LICENSE AUDIT & SYSTEM RECOVERY TOOLKIT v$Script:Version" -Fore White -NoNewline
         Write-Host "".PadLeft($W - 62 - $Script:Version.Length) -NoNewline
         Write-Host "║" -Fore Cyan
         Write-Host "  ║" -Fore Cyan -NoNewline
-        Write-Host "  Pho Tue Software Solutions JSC | HiTechCloud | photuesoftware.com" -Fore DarkGray -NoNewline
+        Write-Host "  Pho Tue Software Solutions JSC | HiTechCloud | hitechcloud.vn" -Fore DarkGray -NoNewline
         Write-Host "".PadLeft($W - 69) -NoNewline
         Write-Host "║" -Fore Cyan
         Write-Host "  ╚$topBot╝" -Fore Cyan
@@ -7158,7 +7158,7 @@ function Show-Menu {
         Write-Host "[0]" -Fore Red -NoNewline
         Write-Host " Exit" -Fore Red -NoNewline
         Write-Host "     " -NoNewline
-        Write-Host "v$Script:Version | photuesoftware.com" -Fore DarkGray
+        Write-Host "v$Script:Version | hitechcloud.vn" -Fore DarkGray
         Write-Host "  $([string]::new([char]0x2500,$W))" -Fore DarkGray
         Write-Host ""
         $ch = Read-Host "  >>"
@@ -7356,7 +7356,7 @@ function Show-Menu {
     Write-Host "  Cam on ban da su dung Tool!" -Fore Cyan
     Write-Host "  Pho Tue SoftWare Solutions JSC" -Fore DarkGray
     Write-Host "  Hotline: 0865.920.041" -Fore DarkGray
-    Write-Host "  Website: photuesoftware.com | hitechcloud.vn" -Fore DarkGray
+    Write-Host "  Website: hitechcloud.vn | hitechcloud.vn" -Fore DarkGray
     Write-Host "  $([string]::new([char]0x2550, 50))" -Fore Cyan
     Write-Host ""
 }

@@ -202,7 +202,7 @@ Microsoft Genuine License Audit & Recovery Tool
 
 **CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ**
 
-- 🌐 Website: [photuesoftware.com](https://photuesoftware.com)
+- 🌐 Website: [hitechcloud.vn](https://hitechcloud.vn)
 - 🌐 Website: [hitechcloud.vn](https://hitechcloud.vn)
 
 - 📧 Email: info@photuesoftware.com
