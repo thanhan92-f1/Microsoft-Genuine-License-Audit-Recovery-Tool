@@ -152,12 +152,12 @@ function Get-LicenseAudit {
     $winLic.Licensed=($winLic.Status-match "Licensed")
     try{$winLic.OEMKey=(Get-CimInstance -ClassName SoftwareLicensingService -EA SilentlyContinue).OA3xOriginalProductKey}catch{}
 
-    $sc=if($winLic.Licensed){"Green"}elseif($winLic.Status-match "Notification"){"Yellow"}else{"Red"}}
+    $sc=if($winLic.Licensed){"Green"}elseif($winLic.Status-match "Notification"){"Yellow"}else{"Red"}
     Write-Host "  ── Windows License ─────────────────────────────────────" -Fore Cyan
     Write-Host "  Trang thai:    " -No; Write-Host $winLic.Status -Fore $sc
     Write-Host "  Channel:       $($winLic.Channel)" -Fore White
     Write-Host "  Mo ta:         $($winLic.Description)" -Fore White
-    Write-Host "  Key (5 kt):    $($winLic.PartialKey)" -Fore White
+    Write-Host "  Key 5 ky tu:     $($winLic.PartialKey)" -Fore White
     Write-Host "  Het han:       $($winLic.Expiration)" -Fore White
     if($winLic.OEMKey){Write-Host "  OEM Key:       $($winLic.OEMKey)" -Fore Green}
     if($winLic.KMSMachine){Write-Host "  KMS Server:    $($winLic.KMSMachine)" -Fore Yellow}
@@ -169,8 +169,9 @@ function Get-LicenseAudit {
     $osppPaths=@("$env:ProgramFiles\Microsoft Office\Office16\OSPP.VBS","${env:ProgramFiles(x86)}\Microsoft Office\Office16\OSPP.VBS","$env:ProgramFiles\Microsoft Office\Office15\OSPP.VBS")
     foreach($ospp in $osppPaths){
         if(Test-Path $ospp){
-            Write-Host "  ── Office ───────────────────────────────────────────────" -Fore Cyan
-            $out=& cscript //NoLogo $ospp /dstatus 2>&1; $cur=@{}
+            Write-Host "  -- Office --" -Fore Cyan
+            $out=& cscript //NoLogo $ospp /dstatus 2>&1
+            $cur=@{}
             foreach($l in $out){
                 if($l -match "LICENSE NAME:\s*(.+)"){$cur.LicenseName=$Matches[1].Trim()}
                 if($l -match "LICENSE STATUS:\s*(.+)"){$cur.LicenseStatus=$Matches[1].Trim()}
@@ -178,11 +179,22 @@ function Get-LicenseAudit {
                 if($l -match "Last 5 characters.*:\s*(.+)"){$cur.PartialKey=$Matches[1].Trim()}
                 if($l -match "KMS machine name:\s*(.+)"){$cur.KMSMachine=$Matches[1].Trim()}
                 if($l -match "---"){
-                    if($cur.LicenseName){$officeList+=$cur.Clone(); $oc=if($cur.LicenseStatus-match "LICENSED"){"Green"}else{"Yellow"}; Write-Host "  $($cur.LicenseName): " -No; Write-Host $cur.LicenseStatus -Fore $oc; if($cur.KMSMachine){Write-Host "  KMS: $($cur.KMSMachine)" -Fore Yellow}}
+                    if($cur.LicenseName){
+                        $officeList+=$cur.Clone()
+                        $oc=if($cur.LicenseStatus-match "LICENSED"){"Green"}else{"Yellow"}
+                        Write-Host "  $($cur.LicenseName): " -No
+                        Write-Host $cur.LicenseStatus -Fore $oc
+                        if($cur.KMSMachine){Write-Host "  KMS: $($cur.KMSMachine)" -Fore Yellow}
+                    }
                     $cur=@{}
                 }
             }
-            if($cur.LicenseName){$officeList+=$cur.Clone(); $oc=if($cur.LicenseStatus-match "LICENSED"){"Green"}else{"Yellow"}; Write-Host "  $($cur.LicenseName): " -No; Write-Host $cur.LicenseStatus -Fore $oc}
+            if($cur.LicenseName){
+                $officeList+=$cur.Clone()
+                $oc=if($cur.LicenseStatus-match "LICENSED"){"Green"}else{"Yellow"}
+                Write-Host "  $($cur.LicenseName): " -No
+                Write-Host $cur.LicenseStatus -Fore $oc
+            }
         }
     }
     if($officeList.Count-eq 0){Write-Host "  Khong tim thay Office" -Fore DarkGray}
@@ -246,7 +258,7 @@ function Detect-InvalidActivation {
 #  PHASE 5: XAC NHAN & LAM SACH
 # ============================================================
 function Confirm-And-Cleanup {
-    Write-Header "PHASE 5: XAC NHAN & LAM SACH"
+    Write-Header "PHASE 5: XAC NHAN VA LAM SACH"
     $issues=$Script:AuditReport.Issues
     if($issues.Count-eq 0){Write-Host "  He thong sach. Khong can lam sach." -Fore Green; return}
 
@@ -264,9 +276,9 @@ function Confirm-And-Cleanup {
     $n++; Write-Host "    [$n] THUC HIEN TAT CA" -Fore Green; $opts+="All"
     Write-Host "    [0] Bo qua" -Fore Red; Write-Host ""
 
-    $ch=Read-Host "  Chon (so, nhieu so cach phay, hoac 'all')"
+    $ch=Read-Host "  Chon (so, nhieu so cach phay, hoac all)"
     if($ch-eq "0"-or $ch-eq ""){return}
-    if($ch-eq "all"-or $ch-eq "$n"){$acts=$opts|?{$_-ne "All"}}else{$idxs=$ch-split "[,\s]+"|%{[int]$_-1}; $acts=@(); foreach($i in $idxs){if($i-ge 0-and $i-lt $opts.Count){$acts+=$opts[$i]}}}
+    if($ch -eq "all" -or $ch -eq "$n"){$acts=$opts | Where-Object {$_ -ne "All"}}else{$idxs=$ch -split "[,\s]+" | ForEach-Object {[int]$_ - 1}; $acts=@(); foreach($i in $idxs){if($i -ge 0 -and $i -lt $opts.Count){$acts+=$opts[$i]}}}
 
     # Execute cleanup
     foreach($act in $acts){
@@ -393,33 +405,41 @@ function Export-AuditReport {
     $hr=""; foreach($k in $r.HealthStatus.Keys){$hc=if($r.HealthStatus[$k]-eq "OK"){"#3fb950"}else{"#d29922"}; $hr+="<tr><td>$k</td><td style=`"color:$hc`">$($r.HealthStatus[$k])</td></tr>"}
     $or=""; foreach($o in $r.Office){$oc=if($o.LicenseStatus-match "LICENSED"){"#3fb950"}else{"#d29922"}; $or+="<tr><td>$($o.LicenseName)</td><td style=`"color:$oc`">$($o.LicenseStatus)</td><td>$($o.PartialKey)</td><td>$($o.KMSMachine)</td></tr>"}
 
-    $html=@"<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Audit - $mn</title>
-<style>body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}.c{max-width:1000px;margin:0 auto}h1{color:#58a6ff;border-bottom:2px solid #30363d;padding-bottom:10px}h2{color:#58a6ff;margin-top:30px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #30363d}th{background:#161b22;color:#58a6ff}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin:15px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.stat{padding:15px;background:#0d1117;border-radius:6px;text-align:center}.stat .v{font-size:2em;font-weight:bold;color:#3fb950}.stat .l{color:#8b949e;font-size:0.9em}.footer{text-align:center;padding:30px;color:#8b949e;font-size:0.85em;border-top:1px solid #30363d;margin-top:40px}</style></head><body><div class="c">
-<h1>Microsoft License Audit Report</h1><p>May tinh: <strong>$mn</strong> | Ngay: <strong>$($r.AuditDate)</strong></p>
-<div class="grid"><div class="card"><div class="stat"><div class="v">$($s.CurrentEdition)</div><div class="l">Windows Edition</div></div></div>
-<div class="card"><div class="stat"><div class="v" style="color:$sc">$($w.Status)</div><div class="l">License Status</div></div></div></div>
-<h2>He thong</h2><div class="card"><table><tr><th>Thuoc tinh</th><th>Gia tri</th></tr>
-<tr><td>San pham</td><td>$($s.ProductName)</td></tr><tr><td>Build</td><td>$($s.CurrentBuild).$($s.UBR) ($($s.DisplayVersion))</td></tr>
-<tr><td>CPU</td><td>$($s.CPU)</td></tr><tr><td>RAM</td><td>$($s.RAM_GB) GB</td></tr>
-<tr><td>Disk</td><td>$($s.DiskSize_GB) GB ($($s.PartitionStyle))</td></tr>
-<tr><td>TPM</td><td>$($s.TPMPresent) / $($s.TPMVersion)</td></tr>
-<tr><td>Secure Boot</td><td>$($s.SecureBoot)</td></tr><tr><td>Boot Mode</td><td>$($s.BootMode)</td></tr>
-</table></div>
-<h2>Windows License</h2><div class="card"><table><tr><th>Thuoc tinh</th><th>Gia tri</th></tr>
-<tr><td>Trang thai</td><td style="color:$sc; font-weight:bold">$($w.Status)</td></tr>
-<tr><td>Channel</td><td>$($w.Channel)</td></tr><tr><td>Mo ta</td><td>$($w.Description)</td></tr>
-<tr><td>Key</td><td>$($w.PartialKey)</td></tr><tr><td>Het han</td><td>$($w.Expiration)</td></tr>
-$(if($w.OEMKey){"<tr><td>OEM Key</td><td>$($w.OEMKey)</td></tr>"})
-$(if($w.KMSMachine){"<tr><td>KMS Server</td><td style='color:#f85149'>$($w.KMSMachine)</td></tr>"})
-</table></div>
-$(if($r.Office.Count-gt 0){"<h2>Office</h2><div class='card'><table><tr><th>San pham</th><th>Trang thai</th><th>Key</th><th>KMS</th></tr>$or</table></div>"})
-<h2>Windows 11 ($($r.Win11Ready.Pass)/$($r.Win11Ready.Pass+$r.Win11Ready.Fail) PASS)</h2>
-<div class="card"><table><tr><th>Tieu chi</th><th>Ket qua</th><th>Chi tiet</th></tr>$wr</table></div>
-$(if($r.Issues.Count-gt 0){"<h2>Van de ($($r.Issues.Count))</h2><div class='card'><table><tr><th>Muc do</th><th>Loai</th><th>Chi tiet</th></tr>$ir</table></div>"})
-<h2>Suc khoe</h2><div class="card"><table><tr><th>Thanh phan</th><th>Trang thai</th></tr>$hr</table></div>
-<div class="footer"><p>Pho Tue SoftWare Solutions JSC | HiTechCloud - Microsoft Partner</p>
-<p>Microsoft Genuine License Audit & Recovery Tool v2.0</p></div></div></body></html>"@
-    $html|Out-File $htmlPath -Encoding UTF8; Write-Step "OK" "HTML: $htmlPath" "OK"
+    $html = @()
+    $html += '<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Audit - ' + $mn + '</title>'
+    $html += '<style>body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}.c{max-width:1000px;margin:0 auto}h1{color:#58a6ff;border-bottom:2px solid #30363d;padding-bottom:10px}h2{color:#58a6ff;margin-top:30px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #30363d}th{background:#161b22;color:#58a6ff}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin:15px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.stat{padding:15px;background:#0d1117;border-radius:6px;text-align:center}.stat .v{font-size:2em;font-weight:bold;color:#3fb950}.stat .l{color:#8b949e;font-size:0.9em}.footer{text-align:center;padding:30px;color:#8b949e;font-size:0.85em;border-top:1px solid #30363d;margin-top:40px}</style></head><body><div class="c">'
+    $html += '<h1>Microsoft License Audit Report</h1><p>May tinh: <strong>' + $mn + '</strong> | Ngay: <strong>' + $r.AuditDate + '</strong></p>'
+    $html += '<div class="grid"><div class="card"><div class="stat"><div class="v">' + $s.CurrentEdition + '</div><div class="l">Windows Edition</div></div></div>'
+    $html += '<div class="card"><div class="stat"><div class="v" style="color:' + $sc + '">' + $w.Status + '</div><div class="l">License Status</div></div></div></div>'
+    $html += '<h2>He thong</h2><div class="card"><table><tr><th>Thuoc tinh</th><th>Gia tri</th></tr>'
+    $html += '<tr><td>San pham</td><td>' + $s.ProductName + '</td></tr>'
+    $html += '<tr><td>Build</td><td>' + $s.CurrentBuild + '.' + $s.UBR + ' (' + $s.DisplayVersion + ')</td></tr>'
+    $html += '<tr><td>CPU</td><td>' + $s.CPU + '</td></tr>'
+    $html += '<tr><td>RAM</td><td>' + $s.RAM_GB + ' GB</td></tr>'
+    $html += '<tr><td>Disk</td><td>' + $s.DiskSize_GB + ' GB (' + $s.PartitionStyle + ')</td></tr>'
+    $html += '<tr><td>TPM</td><td>' + $s.TPMPresent + ' / ' + $s.TPMVersion + '</td></tr>'
+    $html += '<tr><td>Secure Boot</td><td>' + $s.SecureBoot + '</td></tr>'
+    $html += '<tr><td>Boot Mode</td><td>' + $s.BootMode + '</td></tr>'
+    $html += '</table></div>'
+    $html += '<h2>Windows License</h2><div class="card"><table><tr><th>Thuoc tinh</th><th>Gia tri</th></tr>'
+    $html += '<tr><td>Trang thai</td><td style="color:' + $sc + '; font-weight:bold">' + $w.Status + '</td></tr>'
+    $html += '<tr><td>Channel</td><td>' + $w.Channel + '</td></tr>'
+    $html += '<tr><td>Mo ta</td><td>' + $w.Description + '</td></tr>'
+    $html += '<tr><td>Key</td><td>' + $w.PartialKey + '</td></tr>'
+    $html += '<tr><td>Het han</td><td>' + $w.Expiration + '</td></tr>'
+    if ($w.OEMKey) { $html += '<tr><td>OEM Key</td><td>' + $w.OEMKey + '</td></tr>' }
+    if ($w.KMSMachine) { $html += '<tr><td>KMS Server</td><td style="color:#f85149">' + $w.KMSMachine + '</td></tr>' }
+    $html += '</table></div>'
+    if ($r.Office.Count -gt 0) { $html += '<h2>Office</h2><div class="card"><table><tr><th>San pham</th><th>Trang thai</th><th>Key</th><th>KMS</th></tr>' + $or + '</table></div>' }
+    $html += '<h2>Windows 11 (' + $r.Win11Ready.Pass + '/' + ($r.Win11Ready.Pass + $r.Win11Ready.Fail) + ' PASS)</h2>'
+    $html += '<div class="card"><table><tr><th>Tieu chi</th><th>Ket qua</th><th>Chi tiet</th></tr>' + $wr + '</table></div>'
+    if ($r.Issues.Count -gt 0) { $html += '<h2>Van de (' + $r.Issues.Count + ')</h2><div class="card"><table><tr><th>Muc do</th><th>Loai</th><th>Chi tiet</th></tr>' + $ir + '</table></div>' }
+    $html += '<h2>Suc khoe</h2><div class="card"><table><tr><th>Thanh phan</th><th>Trang thai</th></tr>' + $hr + '</table></div>'
+    $html += '<div class="footer"><p>Pho Tue SoftWare Solutions JSC | HiTechCloud - Microsoft Partner</p>'
+    $html += '<p>Microsoft Genuine License Audit & Recovery Tool v2.0</p></div></div></body></html>'
+
+    ($html -join "`n") | Out-File $htmlPath -Encoding UTF8
+    Write-Step "OK" "HTML: $htmlPath" "OK"
 
     Write-Host ""
     Write-Host "  Bao cao: $Script:ReportDir" -Fore Cyan; Write-Host ""
@@ -433,7 +453,7 @@ $(if($r.Issues.Count-gt 0){"<h2>Van de ($($r.Issues.Count))</h2><div class='card
 function Invoke-FullAudit {
     Get-SystemInventory; Test-Windows11Compatibility; Get-LicenseAudit; Detect-InvalidActivation
     Confirm-And-Cleanup; Invoke-EditionUpgrade; Invoke-Activation; Verify-Activation; Test-SystemHealth; Export-AuditReport
-    Write-Host ""; Write-Host "  HOAN TAT KIEM TOAN & PHUC HOI!" -Fore Green; Write-Host ""
+    Write-Host ""; Write-Host "  HOAN TAT KIEM TOAN VA PHUC HOI!" -Fore Green; Write-Host ""
 }
 
 # ============================================================
@@ -455,11 +475,11 @@ function Show-Menu {
         Clear-Host
         Write-Host ""
         Write-Host "  $([string]::new([char]0x2550,65))" -Fore Cyan
-        Write-Host "   MICROSOFT GENUINE LICENSE AUDIT & RECOVERY TOOL v2.0" -Fore White
+        Write-Host "   MICROSOFT GENUINE LICENSE AUDIT AND RECOVERY TOOL v2.0" -Fore White
         Write-Host "   Pho Tue SoftWare Solutions JSC | HiTechCloud" -Fore DarkGray
         Write-Host "  $([string]::new([char]0x2550,65))" -Fore Cyan
         Write-Host ""
-        Write-Host "   --- KIEM TOAN & PHUC HOI ---" -Fore Yellow
+        Write-Host "   --- KIEM TOAN VA PHUC HOI ---" -Fore Yellow
         Write-Host "   [1] Kiem toan toan dien (Audit + Cleanup + Activate + Report)" -Fore Green
         Write-Host "   [2] Chi kiem tra thong tin he thong" -Fore White
         Write-Host "   [3] Chi phat hien van de ban quyen" -Fore White
@@ -470,7 +490,7 @@ function Show-Menu {
         Write-Host "   --- CHUC NANG DON LE ---" -Fore Yellow
         Write-Host "   [7] Kiem tra phien ban Windows" -Fore White
         Write-Host "   [8] Kiem tra trang thai License" -Fore White
-        Write-Host "   [9] Nhap & kich hoat key moi" -Fore White
+        Write-Host "   [9] Nhap va kich hoat key moi" -Fore White
         Write-Host "   [A] Sua loi he thong (DISM + SFC)" -Fore White
         Write-Host "   [B] Nang cap Home -> Pro" -Fore White
         Write-Host ""
@@ -503,7 +523,7 @@ function Show-Menu {
 #  BAT DAU
 # ============================================================
 Write-Host ""
-Write-Host "  Dang tai Microsoft Genuine License Audit & Recovery Tool v2.0..." -Fore Cyan
+Write-Host "  Dang tai Microsoft Genuine License Audit and Recovery Tool v2.0..." -Fore Cyan
 Write-Host "  Pho Tue SoftWare Solutions JSC | HiTechCloud" -Fore DarkGray
 Write-Host ""
 Show-Menu

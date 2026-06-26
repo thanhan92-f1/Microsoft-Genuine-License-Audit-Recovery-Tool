@@ -1,13 +1,13 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Windows License Cleanup Tool - Pho Tue Software Solutions JSC
+title Microsoft Genuine License Audit & Recovery Tool - Pho Tue Software Solutions JSC
 color 0A
 
 :: ============================================================
-::  TOOL GỠ BỎ LICENSE WINDOWS LẬU & CHUẨN HÓA HỆ THỐNG
+::  MICROSOFT GENUINE LICENSE AUDIT & RECOVERY TOOL v3.0
 ::  Công ty: CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ
-::  Phiên bản: 1.0
-::  Ngày: 2026-06-25
+::  Phiên bản: 3.0
+::  Ngày: 2026-06-26
 :: ============================================================
 
 :: Kiểm tra quyền Administrator
@@ -27,36 +27,60 @@ if %errorlevel% neq 0 (
 :MENU
 cls
 echo.
-echo  ╔═══════════════════════════════════════════════════════════════════╗
-echo  ║     TOOL GỠ BỎ LICENSE WINDOWS LẬU & CHUẨN HÓA HỆ THỐNG       ║
-echo  ║         Pho Tue SoftWare Solutions JSC - v1.0                    ║
-echo  ╠═══════════════════════════════════════════════════════════════════╣
-echo  ║                                                                   ║
-echo  ║   [1] Gỡ bỏ License lậu & dọn dẹp hệ thống (TOÀN BỘ)           ║
-echo  ║   [2] Chỉ gỡ Product Key hiện tại                                ║
-echo  ║   [3] Chỉ xóa key khỏi Registry                                  ║
-echo  ║   [4] Chỉ xóa thông tin KMS                                      ║
-echo  ║   [5] Dọn dẹp file & thư mục KMS rác                             ║
-echo  ║   [6] Dọn dẹp Scheduled Tasks liên quan KMS                      ║
-echo  ║   [7] Sửa file Hosts (xóa block Microsoft)                       ║
-echo  ║   [8] Kiểm tra trạng thái License hiện tại                       ║
-echo  ║   [9] Thoát                                                       ║
-echo  ║                                                                   ║
-echo  ╚═══════════════════════════════════════════════════════════════════╝
+echo  ╔═══════════════════════════════════════════════════════════════════════╗
+echo  ║   MICROSOFT GENUINE LICENSE AUDIT ^& RECOVERY TOOL v3.0              ║
+echo  ║       Pho Tue SoftWare Solutions JSC - HiTechCloud                   ║
+echo  ╠═══════════════════════════════════════════════════════════════════════╣
+echo  ║                                                                       ║
+echo  ║   --- KIEM TOAN VA PHUC HOI ---                                       ║
+echo  ║   [1] Chay tool PowerShell toan dien (Audit + Cleanup + Activate)     ║
+echo  ║   [2] Gỡ bỏ License lậu ^& dọn dẹp hệ thống (TOÀN BỘ)               ║
+echo  ║   [3] Kiểm tra trạng thái License hiện tại                            ║
+echo  ║                                                                       ║
+echo  ║   --- CHUC NANG DON LE ---                                             ║
+echo  ║   [4] Chỉ gỡ Product Key hiện tại                                     ║
+echo  ║   [5] Chỉ xóa key khỏi Registry                                       ║
+echo  ║   [6] Chỉ xóa thông tin KMS                                           ║
+echo  ║   [7] Dọn dẹp file ^& thư mục KMS rác                                 ║
+echo  ║   [8] Dọn dẹp Scheduled Tasks liên quan KMS                           ║
+echo  ║   [9] Sửa file Hosts (xóa block Microsoft)                            ║
+echo  ║                                                                       ║
+echo  ║   [0] Thoát                                                            ║
+echo  ║                                                                       ║
+echo  ╚═══════════════════════════════════════════════════════════════════════╝
 echo.
-set /p choice="  Chon chuc nang [1-9]: "
+set /p choice="  Chon chuc nang [0-9]: "
 
-if "%choice%"=="1" goto FULL_CLEANUP
-if "%choice%"=="2" goto UNINSTALL_KEY
-if "%choice%"=="3" goto CLEAN_REGISTRY
-if "%choice%"=="4" goto CLEAN_KMS
-if "%choice%"=="5" goto CLEAN_FILES
-if "%choice%"=="6" goto CLEAN_TASKS
-if "%choice%"=="7" goto FIX_HOSTS
-if "%choice%"=="8" goto CHECK_STATUS
-if "%choice%"=="9" goto EXIT
+if "%choice%"=="1" goto RUN_PS_TOOL
+if "%choice%"=="2" goto FULL_CLEANUP
+if "%choice%"=="3" goto CHECK_STATUS
+if "%choice%"=="4" goto UNINSTALL_KEY
+if "%choice%"=="5" goto CLEAN_REGISTRY
+if "%choice%"=="6" goto CLEAN_KMS
+if "%choice%"=="7" goto CLEAN_FILES
+if "%choice%"=="8" goto CLEAN_TASKS
+if "%choice%"=="9" goto FIX_HOSTS
+if "%choice%"=="0" goto EXIT
 echo  [!] Lua chon khong hop le. Vui long chon lai.
 timeout /t 2 >nul
+goto MENU
+
+:: ============================================================
+::  [1] CHAY TOOL POWERSHELL TOAN DIEN
+:: ============================================================
+:RUN_PS_TOOL
+cls
+echo.
+echo  ═══════════════════════════════════════════════════════════
+echo   DANG CHAY MICROSOFT LICENSE AUDIT TOOL v3.0
+echo  ═══════════════════════════════════════════════════════════
+echo.
+echo  [i] Dang tai va chay tool PowerShell...
+echo.
+powershell -ExecutionPolicy Bypass -File "%~dp0Microsoft-License-Audit-Tool.ps1"
+echo.
+echo  [OK] Tool da hoan tat.
+pause
 goto MENU
 
 :: ============================================================

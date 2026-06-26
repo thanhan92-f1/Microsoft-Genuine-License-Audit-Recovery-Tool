@@ -1,6 +1,6 @@
-# 🛡️ Windows Genuine License Tool
+# 🛡️ Microsoft Genuine License Audit & Recovery Tool
 
-> **Công cụ chuẩn hóa bản quyền Windows** - Gỡ bỏ license lậu (KMS, AutoKMS, KMSpico...) và khôi phục Windows nguyên bản.
+> **Công cụ kiểm toán & phục hồi bản quyền Microsoft toàn diện** - Kiểm tra Windows, Office, Project, Visio, Visual Studio, SQL Server, Microsoft 365... Phát hiện kích hoạt không hợp lệ, gỡ bỏ KMS/crack, chuẩn hóa hệ thống, và xuất báo cáo chi tiết.
 
 **CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ VÀ PHẦN MỀM PHỔ TUỆ**
 
@@ -18,23 +18,47 @@ Tool sẽ tự động tải về và chạy ngay trên máy tính của bạn!
 
 ---
 
-## 📋 Chức năng
+## 📋 Chức năng (v3.0)
+
+### 🔍 Kiểm toán toàn diện Microsoft
+
+| Sản phẩm | Kiểm tra |
+|----------|----------|
+| **Windows** | Edition, Build, Channel, License Status, OEM Key, KMS, Activation ID |
+| **Office** | Office 365, 2024, LTSC, 2021, 2019, 2016 - License, KMS, Channel |
+| **Project** | Standard, Professional, LTSC - License status |
+| **Visio** | Standard, Professional, LTSC - License status |
+| **Visual Studio** | Professional, Enterprise, Community - qua vswhere + Registry |
+| **SQL Server** | Instances, Services, Edition |
+| **Microsoft 365** | Subscription, Shared Computer Activation, Channel |
+| **Exchange Server** | Services detection |
+| **Remote Desktop** | RD Licensing status |
+| **Windows Server** | Edition, License |
+
+### 🛡️ Phát hiện & Xử lý
 
 | # | Chức năng | Mô tả |
 |---|-----------|--------|
-| 1 | **Gỡ bỏ toàn bộ** | Quy trình 8 bước: gỡ key, xóa registry, xóa KMS, reset license, dọn file, xóa tasks, sửa hosts, khôi phục dịch vụ |
-| 2 | Gỡ Product Key | `slmgr /upk` - Gỡ key hiện tại |
-| 3 | Xóa Registry Key | `slmgr /cpky` - Xóa key khỏi registry |
-| 4 | Xóa thông tin KMS | `slmgr /ckms` + `/rearm` |
-| 5 | Dọn file KMS | Xóa KMSpico, KMSAuto, KMS-R@1n... |
-| 6 | Xóa Scheduled Tasks | Xóa AutoKMS, SvcRestartTask... |
-| 7 | Sửa file Hosts | Xóa dòng block Microsoft |
-| 8 | Kiểm tra License | `slmgr /dlv` + `/xpr` |
-| 9 | Nhập & kích hoạt key mới | Nhập key Pro và kích hoạt online |
-| A | **Kiểm tra phiên bản** | Xem edition hiện tại, OEM key, target editions |
-| B | **Sửa lỗi hệ thống** | DISM RestoreHealth + SFC + xóa cache Windows Update |
-| C | **Nâng cấp Home → Pro** | 3 cách: generic key, key trực tiếp, DISM |
-| D | **Nâng cấp toàn diện** | Cleanup + sửa lỗi + upgrade + activate (1 lần) |
+| 1 | **Kiem toan toan dien** | Audit + Cleanup + Activate + Report (10 phases) |
+| 2 | **Phat hien KMS** | KMS Server, DNS KMS, Registry, Scheduled Tasks |
+| 3 | **Phat hien crack** | KMSpico, KMSAuto, HEU_KMS, Microsoft Toolkit... |
+| 4 | **Phan loai rui ro** | HOP_LE / CAN_XEM_XET / CAN_XU_LY |
+| 5 | **Xac nhan truoc khi sua** | Hien thi chi tiet, yeu cau xac nhan |
+| 6 | **Lam sach he thong** | Go key, xoa KMS, khoi phuc Defender, sua Hosts |
+| 7 | **Chuyen edition** | Home→Pro va cac edition khac |
+| 8 | **Kich hoat** | OEM, Retail, MAK, Phone |
+| 9 | **Windows 11** | TPM, Secure Boot, GPT, UEFI, RAM, CPU |
+| 10 | **Bao cao** | HTML (dashboard), JSON, TXT, CSV |
+
+### 📊 Bao cao HTML Dashboard
+
+Bao cao HTML bao gom:
+- **Stats cards**: Edition, License Status, Issues, Win11 Ready
+- **System Info**: CPU, RAM, Disk, TPM, Secure Boot, BIOS
+- **License Details**: Windows, Office, Project, Visio, VS, SQL
+- **Issues Table**: Severity, Type, Product, Detail
+- **Win11 Compatibility**: Pass/Fail cho moi tieu chi
+- **Health Check**: Services, Defender, Firewall, Disk
 
 ---
 
@@ -74,11 +98,77 @@ Client (Máy trạm)                    VPS (Server)
        │  irm https://domain | iex          │
        ├───────────────────────────────────►│
        │                                    │
-       │  ← Windows_License_Cleanup.ps1    │
+       │  ← Microsoft-License-Audit-Tool.ps1│
        │◄───────────────────────────────────┤
        │                                    │
-       │  Tool chạy tự động trên máy        │
-       │  (gỡ license lậu, dọn dẹp hệ thống)│
+       │  Tool chay tu dong tren may        │
+       │  (kiem toan, lam sach, kich hoat)  │
+```
+
+---
+
+## 🏗️ Kiến trúc Tool v3.0
+
+```
+Microsoft Genuine License Audit & Recovery Tool
+│
+├── Phase 1: Thu thap thong tin he thong
+│   ├── Windows Version, Build, Edition
+│   ├── CPU, RAM, Disk, BIOS, Mainboard
+│   ├── TPM, Secure Boot, Boot Mode
+│   └── Network, Windows Update
+│
+├── Phase 2: Kiem tra dieu kien Windows 11
+│   ├── TPM 2.0, Secure Boot, GPT, UEFI
+│   ├── RAM >= 4GB, Storage >= 64GB
+│   └── CPU ho tro
+│
+├── Phase 3: Kiem tra ban quyen Microsoft
+│   ├── Windows License (Channel, KMS, OEM)
+│   ├── Office (Click-to-Run, OSPP)
+│   ├── Project, Visio
+│   ├── Visual Studio (vswhere)
+│   ├── SQL Server
+│   ├── Microsoft 365
+│   ├── Exchange Server
+│   └── Remote Desktop
+│
+├── Phase 4: Phat hien kich hoat khong hop le
+│   ├── KMS Server, DNS KMS
+│   ├── Scheduled Tasks, Services
+│   ├── Startup, Installed Programs
+│   ├── Defender Status, Exclusions
+│   ├── KMS Files & Directories
+│   ├── Registry Entries
+│   ├── Hosts File
+│   ├── Certificates
+│   └── Event Logs
+│
+├── Phase 5: Xac nhan va lam sach
+│   ├── Phan loai: HOP_LE / CAN_XEM_XET / CAN_XU_LY
+│   ├── Hien thi chi tiet, yeu cau xac nhan
+│   ├── Tao backup truoc khi thay doi
+│   └── Lam sach tung phan theo lua chon
+│
+├── Phase 6: Chuyen Edition
+│   ├── Generic Key
+│   ├── Key rieng
+│   └── DISM
+│
+├── Phase 7: Kich hoat
+│   ├── OEM, Retail, MAK
+│   ├── Online, Phone
+│   └── DISM
+│
+├── Phase 8: Xac minh ket qua
+│
+├── Phase 9: Suc khoe he thong
+│
+└── Phase 10: Xuat bao cao
+    ├── HTML (Dashboard)
+    ├── JSON
+    ├── TXT
+    └── CSV
 ```
 
 ---

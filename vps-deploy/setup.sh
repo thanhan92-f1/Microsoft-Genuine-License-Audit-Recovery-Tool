@@ -109,7 +109,11 @@ echo -e "  ${YELLOW}[3/5] Download scripts tu GitHub...${NC}"
 curl -sSL "$REPO_RAW/vps-deploy/server.py" -o "$INSTALL_DIR/server.py"
 echo -e "        ${GREEN}[OK] Da tai: server.py${NC}"
 
-# Download Windows_License_Cleanup.ps1
+# Download Microsoft-License-Audit-Tool.ps1 (v3.0 - chinh)
+curl -sSL "$REPO_RAW/Microsoft-License-Audit-Tool.ps1" -o "$INSTALL_DIR/scripts/Microsoft-License-Audit-Tool.ps1"
+echo -e "        ${GREEN}[OK] Da tai: Microsoft-License-Audit-Tool.ps1${NC}"
+
+# Download Windows_License_Cleanup.ps1 (legacy)
 curl -sSL "$REPO_RAW/Windows_License_Cleanup.ps1" -o "$INSTALL_DIR/scripts/Windows_License_Cleanup.ps1"
 echo -e "        ${GREEN}[OK] Da tai: Windows_License_Cleanup.ps1${NC}"
 
@@ -122,7 +126,7 @@ echo -e "        ${GREEN}[OK] Da tai: index.html${NC}"
 echo -e "  ${YELLOW}  Cap nhat domain: $DOMAIN${NC}"
 sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/server.py" 2>/dev/null
 sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/templates/index.html" 2>/dev/null
-sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/scripts/Windows_License_Cleanup.ps1" 2>/dev/null
+sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/scripts/Microsoft-License-Audit-Tool.ps1" 2>/dev/null
 sed -i "s|irm-genuine-license-windows.hitechcloud.vn|$DOMAIN|g" "$INSTALL_DIR/scripts/Windows_License_Cleanup.ps1" 2>/dev/null
 echo -e "        ${GREEN}[OK] Da cap nhat domain trong tat ca scripts${NC}"
 
