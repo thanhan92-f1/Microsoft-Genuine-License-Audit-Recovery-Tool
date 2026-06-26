@@ -4918,6 +4918,1213 @@ function Invoke-QuickActions {
 }
 
 # ============================================================
+#  [42-80] WINDOWS SERVER & HOSTING PROVIDER CENTER
+# ============================================================
+
+# ── [42] Windows Installation Audit ──
+function Invoke-WindowsInstallationAudit {
+    Write-Header "WINDOWS INSTALLATION AUDIT"
+    $nt = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -EA SilentlyContinue
+    $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
+
+    Write-Host "  Product Name:        $($nt.ProductName)" -Fore White
+    Write-Host "  Edition:             $($nt.EditionID)" -Fore White
+    Write-Host "  Build:               $($nt.CurrentBuild).$($nt.UBR)" -Fore White
+    Write-Host "  Display Version:     $($nt.DisplayVersion)" -Fore White
+    Write-Host "  Release ID:          $($nt.ReleaseId)" -Fore White
+    Write-Host "  Branch:              $($nt.BuildBranch)" -Fore White
+    Write-Host "  Install Date:        $($os.InstallDate)" -Fore White
+    Write-Host "  Original Install:    $($nt.InstallDate)" -Fore White
+    Write-Host "  Architecture:        $($os.OSArchitecture)" -Fore White
+    Write-Host "  System Drive:        $($os.SystemDrive)" -Fore White
+
+    # Experience Pack
+    $expPack = Get-AppxPackage Microsoft.Windows.Client.CBS -EA SilentlyContinue
+    if ($expPack) { Write-Host "  Experience Pack:     $($expPack.Version)" -Fore Cyan }
+
+    # Servicing Stack
+    $ssu = Get-HotFix | Where-Object { $_.Description -match "Servicing Stack" } | Sort-Object InstalledOn -Descending | Select-Object -First 1
+    if ($ssu) { Write-Host "  Servicing Stack:     $($ssu.HotFixID)" -Fore Cyan }
+
+    Write-Host ""
+}
+
+# ── [43] Windows Component Store ──
+function Invoke-ComponentStore {
+    Write-Header "WINDOWS COMPONENT STORE"
+    Write-Step "INFO" "Analyzing component store..."
+    $result = & DISM /Online /Cleanup-Image /AnalyzeComponentStore 2>&1
+    foreach ($l in $result) {
+        if ($l.Trim()) {
+            $sc = if ($l -match "Yes|Recommended|OK") { "Green" } elseif ($l -match "No|Warning") { "Yellow" } else { "White" }
+            Write-Host "  $l" -Fore $sc
+        }
+    }
+    Write-Host ""
+    Write-Step "INFO" "Checking component health..."
+    $health = & DISM /Online /Cleanup-Image /CheckHealth 2>&1
+    $corrupt = $health -match "corruption|repairable|No component"
+    foreach ($l in $health) { if ($l.Trim()) { Write-Host "  $l" -Fore $(if($l-match "No component"){"Green"}else{"Yellow"}) } }
+    Write-Host ""
+}
+
+# ── [44] Windows Feature Audit ──
+function Invoke-FeatureAudit {
+    Write-Header "WINDOWS FEATURE AUDIT"
+    $features = Get-WindowsOptionalFeature -Online -EA SilentlyContinue
+    $enabled = $features | Where-Object { $_.State -eq "Enabled" }
+    $disabled = $features | Where-Object { $_.State -eq "Disabled" }
+
+    Write-Host "  ── Enabled ($($enabled.Count)) ────────────────────────────────" -Fore Green
+    foreach ($f in $enabled | Select-Object -First 30) { Write-Host "    [ON] $($f.FeatureName)" -Fore Green }
+    if ($enabled.Count -gt 30) { Write-Host "    ... va $($enabled.Count - 30) features khac" -Fore DarkGray }
+
+    Write-Host ""
+    Write-Host "  ── Disabled ($($disabled.Count)) ───────────────────────────────" -Fore DarkGray
+    foreach ($f in $disabled | Select-Object -First 15) { Write-Host "    [--] $($f.FeatureName)" -Fore DarkGray }
+    if ($disabled.Count -gt 15) { Write-Host "    ... va $($disabled.Count - 15) features khac" -Fore DarkGray }
+
+    # Capabilities
+    Write-Host ""
+    Write-Host "  ── Capabilities ─────────────────────────────────────────" -Fore Cyan
+    $caps = Get-WindowsCapability -Online -EA SilentlyContinue
+    $installed = $caps | Where-Object { $_.State -eq "Installed" }
+    Write-Host "  Installed: $($installed.Count) / $($caps.Count)" -Fore White
+    Write-Host ""
+}
+
+# ── [45] Microsoft Store Applications ──
+function Invoke-StoreApps {
+    Write-Header "MICROSOFT STORE APPLICATIONS"
+    $msApps = Get-AppxPackage -AllUsers -EA SilentlyContinue | Where-Object {
+        $_.Publisher -match "Microsoft"
+    } | Select-Object Name, Version, Publisher, InstallDate
+
+    Write-Host "  Total Microsoft Store Apps: $($msApps.Count)" -Fore Cyan
+    Write-Host ""
+    foreach ($app in $msApps | Sort-Object Name) {
+        Write-Host "  $($app.Name)" -Fore White
+        Write-Host "    Version: $($app.Version) | Publisher: $($app.Publisher)" -Fore DarkGray
+    }
+    Write-Host ""
+}
+
+# ── [46] Microsoft Edge Audit ──
+function Invoke-EdgeAudit {
+    Write-Header "MICROSOFT EDGE AUDIT"
+    $edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+    if (Test-Path $edgePath) {
+        $ver = (Get-Item $edgePath).VersionInfo.ProductVersion
+        Write-Host "  Version:       $ver" -Fore White
+        Write-Host "  Path:          $edgePath" -Fore DarkGray
+    }
+    # Policies
+    $policies = Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -EA SilentlyContinue
+    if ($policies) {
+        Write-Host "  Enterprise:    Yes ($(($policies.PSObject.Properties|?{$_.Name-notmatch '^PS'}).Count) policies)" -Fore Yellow
+    } else { Write-Host "  Enterprise:    No" -Fore Green }
+    # Extensions
+    $extPath = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Extensions"
+    if (Test-Path $extPath) {
+        $extCount = (Get-ChildItem $extPath -Directory -EA SilentlyContinue).Count
+        Write-Host "  Extensions:    $extCount" -Fore White
+    }
+    Write-Host ""
+}
+
+# ── [47] OneDrive Audit ──
+function Invoke-OneDriveAudit {
+    Write-Header "ONEDRIVE AUDIT"
+    $odPath = "$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe"
+    if (Test-Path $odPath) {
+        $ver = (Get-Item $odPath).VersionInfo.ProductVersion
+        Write-Host "  Version:           $ver" -Fore White
+        $odSvc = Get-Service OneSyncSvc* -EA SilentlyContinue
+        Write-Host "  Sync Service:      $($odSvc.Status)" -Fore $(if($odSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    } else { Write-Host "  OneDrive:          Khong cai dat" -Fore DarkGray }
+    # Auto start
+    $autoStart = Get-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -EA SilentlyContinue
+    Write-Host "  Auto Start:        $(if($autoStart){'Yes'}else{'No'})" -Fore White
+    # Known Folder Move
+    $kfm = Get-ItemProperty "HKCU:\SOFTWARE\Microsoft\OneDrive\Accounts\Personal" -EA SilentlyContinue
+    if ($kfm) { Write-Host "  KFM Enabled:       Yes" -Fore Green }
+    Write-Host ""
+}
+
+# ── [48] Teams Audit ──
+function Invoke-TeamsAudit {
+    Write-Header "MICROSOFT TEAMS AUDIT"
+    $teamsNew = Get-AppxPackage -AllUsers *MSTeams* -EA SilentlyContinue
+    $teamsClassic = "$env:LOCALAPPDATA\Microsoft\Teams\current\Teams.exe"
+    $teamsMWI = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Teams" -EA SilentlyContinue
+
+    if ($teamsNew) { Write-Host "  New Teams:         $($teamsNew.Version)" -Fore Green }
+    if (Test-Path $teamsClassic) { Write-Host "  Classic Teams:     $((Get-Item $teamsClassic).VersionInfo.ProductVersion)" -Fore Cyan }
+    if ($teamsMWI) { Write-Host "  Machine Wide:      Yes" -Fore White }
+    if (-not $teamsNew -and -not (Test-Path $teamsClassic)) { Write-Host "  Teams:             Khong cai dat" -Fore DarkGray }
+    Write-Host ""
+}
+
+# ── [49] Outlook Audit ──
+function Invoke-OutlookAudit {
+    Write-Header "OUTLOOK AUDIT"
+    # Classic Outlook
+    $outlookPath = "$env:ProgramFiles\Microsoft Office\root\Office16\OUTLOOK.EXE"
+    $outlookPathX86 = "${env:ProgramFiles(x86)}\Microsoft Office\root\Office16\OUTLOOK.EXE"
+    if (Test-Path $outlookPath) { Write-Host "  Classic Outlook:   $((Get-Item $outlookPath).VersionInfo.ProductVersion)" -Fore Green }
+    elseif (Test-Path $outlookPathX86) { Write-Host "  Classic Outlook:   $((Get-Item $outlookPathX86).VersionInfo.ProductVersion)" -Fore Green }
+    else { Write-Host "  Classic Outlook:   Khong co" -Fore DarkGray }
+
+    # New Outlook
+    $newOutlook = Get-AppxPackage *Microsoft.OutlookForWindows* -EA SilentlyContinue
+    if ($newOutlook) { Write-Host "  New Outlook:       $($newOutlook.Version)" -Fore Cyan }
+
+    # OST/PST
+    $ostPath = "$env:LOCALAPPDATA\Microsoft\Outlook"
+    if (Test-Path $ostPath) {
+        $ostFiles = Get-ChildItem "$ostPath\*.ost" -EA SilentlyContinue
+        $pstFiles = Get-ChildItem "$ostPath\*.pst" -EA SilentlyContinue
+        Write-Host "  OST Files:         $($ostFiles.Count)" -Fore White
+        Write-Host "  PST Files:         $($pstFiles.Count)" -Fore White
+    }
+    Write-Host ""
+}
+
+# ── [50-53] Office Add-ins / Channel / Language / Apps ──
+function Invoke-OfficeDetailsAudit {
+    Write-Header "OFFICE DETAILS AUDIT"
+
+    # Office Apps
+    Write-Host "  ── Office Applications ─────────────────────────────────" -Fore Cyan
+    $officeApps = @("WINWORD.EXE","EXCEL.EXE","POWERPNT.EXE","OUTLOOK.EXE","MSACCESS.EXE","MSPUB.EXE","ONENOTE.EXE","VISIO.EXE","WINPROJ.EXE")
+    foreach ($app in $officeApps) {
+        $found = $false
+        foreach ($basePath in @("$env:ProgramFiles\Microsoft Office\root\Office16","${env:ProgramFiles(x86)}\Microsoft Office\root\Office16")) {
+            $appPath = Join-Path $basePath $app
+            if (Test-Path $appPath) {
+                Write-Host "    [OK] $app - $((Get-Item $appPath).VersionInfo.ProductVersion)" -Fore Green
+                $found = $true; break
+            }
+        }
+        if (-not $found) { Write-Host "    [--] $app" -Fore DarkGray }
+    }
+
+    # Update Channel
+    Write-Host ""
+    Write-Host "  ── Update Channel ──────────────────────────────────────" -Fore Cyan
+    $c2r = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -EA SilentlyContinue
+    if ($c2r) {
+        Write-Host "    Channel:         $($c2r.UpdateChannel)" -Fore White
+        Write-Host "    Version:         $($c2r.ClientVersionToReport)" -Fore White
+    }
+
+    # Language Packs
+    Write-Host ""
+    Write-Host "  ── Language Packs ──────────────────────────────────────" -Fore Cyan
+    if ($c2r -and $c2r.ProductReleaseIds) {
+        Write-Host "    Products:        $($c2r.ProductReleaseIds)" -Fore White
+    }
+    $langReg = Get-ItemProperty "HKCU:\SOFTWARE\Microsoft\Office\16.0\Common\LanguageResources" -EA SilentlyContinue
+    if ($langReg) { Write-Host "    Display Language: $($langReg.ProofingLanguage)" -Fore White }
+
+    # Add-ins
+    Write-Host ""
+    Write-Host "  ── COM Add-ins ─────────────────────────────────────────" -Fore Cyan
+    $addinPath = "HKCU:\SOFTWARE\Microsoft\Office\16.0\Word\Addins"
+    if (Test-Path $addinPath) {
+        Get-ChildItem $addinPath -EA SilentlyContinue | ForEach-Object {
+            Write-Host "    $($_.PSChildName)" -Fore White
+        }
+    } else { Write-Host "    Khong co add-ins" -Fore DarkGray }
+    Write-Host ""
+}
+
+# ── [54] Visual Studio Components ──
+function Invoke-VSComponents {
+    Write-Header "VISUAL STUDIO COMPONENTS"
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $vswhere)) { Write-Host "  Khong tim thay VS" -Fore DarkGray; return }
+
+    $vsData = (& $vswhere -all -format json 2>&1) | ConvertFrom-Json
+    foreach ($vs in $vsData) {
+        Write-Host "  $($vs.displayName)" -Fore Cyan
+        Write-Host "    Version:   $($vs.installationVersion)" -Fore White
+        Write-Host "    Path:      $($vs.installPath)" -Fore DarkGray
+        # Workloads
+        $workloads = $vs.properties.PSObject.Properties | Where-Object { $_.Name -match "setupEngineFilePath" }
+        if ($vs.installationPath) {
+            $catalogPath = Join-Path $vs.installationPath "Catalog.json"
+            if (Test-Path $catalogPath) {
+                try {
+                    $catalog = Get-Content $catalogPath -Raw | ConvertFrom-Json
+                    Write-Host "    Channel:   $($catalog.info.channelId)" -Fore DarkGray
+                } catch {}
+            }
+        }
+    }
+    Write-Host ""
+}
+
+# ── [55] SQL Components ──
+function Invoke-SQLComponents {
+    Write-Header "SQL SERVER COMPONENTS"
+    $sqlServices = @(
+        @{Name="MSSQLSERVER"; Display="SQL Engine"}, @{Name="SQLBrowser"; Display="SQL Browser"},
+        @{Name="SQLSERVERAGENT"; Display="SQL Agent"}, @{Name="MSSQLServerOLAPService"; Display="SSAS"},
+        @{Name="ReportServer"; Display="SSRS"}, @{Name="MsDtsServer"; Display="SSIS"}
+    )
+    foreach ($s in $sqlServices) {
+        $svc = Get-Service $s.Name -EA SilentlyContinue
+        if ($svc) { Write-Host "  [OK] $($s.Display): $($svc.Status)" -Fore Green }
+    }
+    # ODBC
+    $odbc = Get-OdbcDriver -EA SilentlyContinue | Where-Object { $_.Name -match "SQL Server" }
+    if ($odbc) { foreach ($d in $odbc) { Write-Host "  [OK] ODBC: $($d.Name) $($d.Platform)" -Fore Cyan } }
+    Write-Host ""
+}
+
+# ── [56] IIS Manager ──
+function Invoke-IISAudit {
+    Write-Header "IIS MANAGER AUDIT"
+    $iisSvc = Get-Service W3SVC -EA SilentlyContinue
+    if (-not $iisSvc) { Write-Host "  IIS: Khong cai dat" -Fore DarkGray; return }
+
+    Write-Host "  Status:        $($iisSvc.Status)" -Fore $(if($iisSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    Import-Module WebAdministration -EA SilentlyContinue
+    if (Get-Command Get-Website -EA SilentlyContinue) {
+        $sites = Get-Website -EA SilentlyContinue
+        Write-Host "  Sites:         $($sites.Count)" -Fore White
+        foreach ($site in $sites) {
+            Write-Host "    $($site.Name) [$($site.State)] - $($site.Bindings.Collection.bindingInformation)" -Fore Cyan
+        }
+        $pools = Get-ChildItem IIS:\AppPools -EA SilentlyContinue
+        Write-Host "  App Pools:     $($pools.Count)" -Fore White
+    }
+    Write-Host ""
+}
+
+# ── [57] Hyper-V ──
+function Invoke-HyperVAudit {
+    Write-Header "HYPER-V AUDIT"
+    $hv = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -EA SilentlyContinue
+    if ($hv.State -ne "Enabled") { Write-Host "  Hyper-V: Khong bat" -Fore DarkGray; return }
+
+    Write-Host "  Hyper-V:         Enabled" -Fore Green
+    $vms = Get-VM -EA SilentlyContinue
+    Write-Host "  VMs:             $($vms.Count)" -Fore White
+    foreach ($vm in $vms) {
+        $sc = switch ($vm.State) { "Running" { "Green" } "Off" { "DarkGray" } default { "Yellow" } }
+        Write-Host "    $($vm.Name) [$($vm.State)] - $([math]::Round($vm.MemoryAssigned/1GB,1))GB RAM" -Fore $sc
+    }
+    $switches = Get-VMSwitch -EA SilentlyContinue
+    Write-Host "  Switches:        $($switches.Count)" -Fore White
+    Write-Host ""
+}
+
+# ── [58] WSL ──
+function Invoke-WSLAudit {
+    Write-Header "WSL AUDIT"
+    $wsl = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -EA SilentlyContinue
+    if ($wsl.State -ne "Enabled") { Write-Host "  WSL: Khong bat" -Fore DarkGray; return }
+
+    Write-Host "  WSL: Enabled" -Fore Green
+    $distros = & wsl --list --verbose 2>&1
+    foreach ($d in $distros) { if ($d.Trim()) { Write-Host "  $d" -Fore White } }
+    Write-Host ""
+}
+
+# ── [59] Windows Sandbox ──
+function Invoke-SandboxAudit {
+    Write-Header "WINDOWS SANDBOX AUDIT"
+    $sb = Get-WindowsOptionalFeature -Online -FeatureName "Containers-DisposableClientVM" -EA SilentlyContinue
+    Write-Host "  Sandbox: $(if($sb.State -eq 'Enabled'){'Enabled'}else{'Disabled'})" -Fore $(if($sb.State -eq 'Enabled'){"Green"}else{"DarkGray"})
+    Write-Host ""
+}
+
+# ── [60] Windows Containers ──
+function Invoke-ContainersAudit {
+    Write-Header "WINDOWS CONTAINERS AUDIT"
+    $cont = Get-WindowsOptionalFeature -Online -FeatureName "Containers" -EA SilentlyContinue
+    Write-Host "  Containers Feature: $(if($cont.State -eq 'Enabled'){'Enabled'}else{'Disabled'})" -Fore $(if($cont.State -eq 'Enabled'){"Green"}else{"DarkGray"})
+    $docker = Get-Service docker -EA SilentlyContinue
+    if ($docker) { Write-Host "  Docker: $($docker.Status)" -Fore Green }
+    Write-Host ""
+}
+
+# ── [61] Windows Licensing Store ──
+function Invoke-LicensingStore {
+    Write-Header "WINDOWS LICENSING STORE"
+    $tokensPath = "$env:SystemRoot\ServiceProfiles\LocalService\AppData\Local\Microsoft\WSLicense\tokens.dat"
+    if (Test-Path $tokensPath) {
+        $tokensInfo = Get-Item $tokensPath
+        Write-Host "  tokens.dat:      $($tokensInfo.Length / 1KB) KB" -Fore White
+        Write-Host "  Modified:        $($tokensInfo.LastWriteTime)" -Fore White
+    } else { Write-Host "  tokens.dat:      Khong tim thay" -Fore Yellow }
+    $sppSvc = Get-Service sppsvc -EA SilentlyContinue
+    Write-Host "  SPP Service:     $($sppSvc.Status)" -Fore $(if($sppSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    Write-Host ""
+}
+
+# ── [62] Activation History ──
+function Invoke-ActivationHistory {
+    Write-Header "ACTIVATION HISTORY"
+    $dlv = & cscript //NoLogo $Script:Slmgr /dlv 2>&1
+    foreach ($l in $dlv) { if ($l.Trim()) { Write-Host "  $l" -Fore White } }
+    Write-Host ""
+}
+
+# ── [63] Windows Recovery ──
+function Invoke-RecoveryAudit {
+    Write-Header "WINDOWS RECOVERY AUDIT"
+    $reAgent = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State" -EA SilentlyContinue
+    Write-Host "  Recovery Environment: $(if($reAgent.ImageState -eq 'IMAGE_STATE_COMPLETE'){'Available'}else{'Unknown'})" -Fore White
+    # WinRE
+    $winre = & reagentc /info 2>&1
+    foreach ($l in $winre) { if ($l.Trim()) { Write-Host "  $l" -Fore White } }
+    Write-Host ""
+}
+
+# ── [64] Device Encryption ──
+function Invoke-EncryptionAudit {
+    Write-Header "DEVICE ENCRYPTION AUDIT"
+    try {
+        $bl = Get-BitLockerVolume -MountPoint $env:SystemDrive -EA SilentlyContinue
+        Write-Host "  Volume:          $($bl.MountPoint)" -Fore White
+        Write-Host "  Protection:      $($bl.ProtectionStatus)" -Fore $(if($bl.ProtectionStatus -eq "On"){"Green"}else{"Yellow"})
+        Write-Host "  Encryption:      $($bl.EncryptionPercentage)%" -Fore White
+        Write-Host "  Key Protectors:  $($bl.KeyProtector.Count)" -Fore White
+        foreach ($kp in $bl.KeyProtector) { Write-Host "    $($kp.KeyProtectorType)" -Fore DarkGray }
+    } catch { Write-Host "  BitLocker: Khong kha dung" -Fore DarkGray }
+    Write-Host ""
+}
+
+# ── [65-66] Driver Audit ──
+function Invoke-DriverAuditFull {
+    Write-Header "DRIVER AUDIT FULL"
+    Write-Host "  ── Unsigned / Problematic ──────────────────────────────" -Fore Cyan
+    try {
+        $problems = Get-PnpDevice | Where-Object { $_.Status -ne "OK" }
+        if ($problems) { foreach ($p in $problems | Select-Object -First 10) { Write-Host "    [!!] $($p.FriendlyName): $($p.Status) [$($p.ConfigManagerErrorCode)]" -Fore Red } }
+        else { Write-Host "    [OK] Khong co driver van de" -Fore Green }
+    } catch {}
+    # Unknown devices
+    Write-Host ""
+    Write-Host "  ── Unknown Devices ─────────────────────────────────────" -Fore Cyan
+    Get-PnpDevice | Where-Object { $_.Class -eq "Unknown" -or $_.Class -eq $null } | ForEach-Object {
+        Write-Host "    [??] $($_.FriendlyName) [$($_.InstanceId)]" -Fore Yellow
+    }
+    Write-Host ""
+}
+
+# ── [67] Windows Update Cache ──
+function Invoke-WUCacheAudit {
+    Write-Header "WINDOWS UPDATE CACHE AUDIT"
+    $wuPath = "$env:SystemRoot\SoftwareDistribution"
+    $catPath = "$env:SystemRoot\System32\catroot2"
+    if (Test-Path $wuPath) {
+        $size = (Get-ChildItem $wuPath -Recurse -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        Write-Host "  SoftwareDistribution: $([math]::Round($size/1MB,1)) MB" -Fore White
+    }
+    if (Test-Path $catPath) {
+        $size2 = (Get-ChildItem $catPath -Recurse -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        Write-Host "  catroot2:             $([math]::Round($size2/1MB,1)) MB" -Fore White
+    }
+    Write-Host ""
+}
+
+# ── [68] Windows Packages ──
+function Invoke-PackagesAudit {
+    Write-Header "WINDOWS PACKAGES AUDIT"
+    $packages = Get-WindowsPackage -Online -EA SilentlyContinue
+    Write-Host "  Total Packages:  $($packages.Count)" -Fore White
+    $installed = ($packages | Where-Object { $_.PackageState -eq "Installed" }).Count
+    Write-Host "  Installed:       $installed" -Fore Green
+    Write-Host ""
+}
+
+# ── [69] Scheduled Maintenance ──
+function Invoke-MaintenanceAudit {
+    Write-Header "SCHEDULED MAINTENANCE AUDIT"
+    $tasks = @("ScheduledDefrag","SilentCleanup","WindowsUpdate","StartComponentCleanup","Consolidator","UsbCeip","KernelCeip")
+    foreach ($t in $tasks) {
+        $task = Get-ScheduledTask -TaskName "*$t*" -EA SilentlyContinue
+        if ($task) { foreach ($tk in $task) { Write-Host "  [OK] $($tk.TaskName): $($tk.State)" -Fore $(if($tk.State -eq 'Ready'){"Green"}else{"Yellow"}) } }
+    }
+    Write-Host ""
+}
+
+# ── [70] Reliability Monitor ──
+function Invoke-ReliabilityAudit {
+    Write-Header "RELIABILITY MONITOR AUDIT"
+    try {
+        $events = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=1,2; StartTime=(Get-Date).AddDays(-7)} -MaxEvents 10 -EA SilentlyContinue
+        if ($events) {
+            Write-Host "  Errors/Warnings (7 ngay): $($events.Count)" -Fore Yellow
+            foreach ($e in $events | Select-Object -First 5) {
+                Write-Host "    [$($e.TimeCreated.ToString('MM-dd HH:mm'))] $($e.ProviderName): $($e.Message.Substring(0, [Math]::Min(80, $e.Message.Length)))" -Fore DarkGray
+            }
+        } else { Write-Host "  Khong co loi trong 7 ngay" -Fore Green }
+    } catch {}
+    Write-Host ""
+}
+
+# ── [71] Event Viewer Analyzer ──
+function Invoke-EventAnalyzer {
+    Write-Header "EVENT VIEWER ANALYZER"
+    $logs = @("System","Application","Security")
+    foreach ($logName in $logs) {
+        try {
+            $errors = Get-WinEvent -FilterHashtable @{LogName=$logName; Level=1,2; StartTime=(Get-Date).AddDays(-7)} -MaxEvents 5 -EA SilentlyContinue
+            $count = if ($errors) { $errors.Count } else { 0 }
+            $sc = if ($count -eq 0) { "Green" } else { "Yellow" }
+            Write-Host "  $logName`: $count errors/warnings" -Fore $sc
+            if ($errors) {
+                foreach ($e in $errors | Select-Object -First 2) {
+                    Write-Host "    [$($e.Id)] $($e.ProviderName) - $($e.TimeCreated.ToString('MM-dd'))" -Fore DarkGray
+                }
+            }
+        } catch {}
+    }
+    Write-Host ""
+}
+
+# ── [72] Windows Services Health ──
+function Invoke-ServicesHealth {
+    Write-Header "WINDOWS SERVICES HEALTH"
+    $criticalServices = @("sppsvc","wuauserv","WinDefend","CryptSvc","msiserver","BITS","LanmanServer","EventLog","Schedule","PlugPlay")
+    foreach ($s in $criticalServices) {
+        $svc = Get-Service $s -EA SilentlyContinue
+        if ($svc) {
+            $sc = if ($svc.Status -eq "Running") { "Green" } elseif ($svc.StartType -eq "Disabled") { "DarkGray" } else { "Yellow" }
+            Write-Host "  $($svc.DisplayName): $($svc.Status) [$($svc.StartType)]" -Fore $sc
+        } else { Write-Host "  $s: Not Found" -Fore Red }
+    }
+    Write-Host ""
+}
+
+# ── [73] Dependency Checker ──
+function Invoke-DependencyChecker {
+    Write-Header "MICROSOFT DEPENDENCY CHECKER"
+    $deps = @(
+        @{Name="Office Activation"; Services=@("sppsvc","ClickToRunSvc","CryptSvc","msiserver")},
+        @{Name="Windows Update"; Services=@("wuauserv","BITS","CryptSvc","msiserver")},
+        @{Name="Defender"; Services=@("WinDefend","WdNisSvc","SecurityHealthService")},
+        @{Name="Store"; Services=@("ClipSVC","InstallService","wlidsvc","TokenBroker")}
+    )
+    foreach ($dep in $deps) {
+        $allOK = $true
+        Write-Host "  ── $($dep.Name) ──────────────────────────────────────" -Fore Cyan
+        foreach ($s in $dep.Services) {
+            $svc = Get-Service $s -EA SilentlyContinue
+            if ($svc -and $svc.Status -eq "Running") { Write-Host "    [OK] $($svc.DisplayName)" -Fore Green }
+            elseif ($svc) { Write-Host "    [!!] $($svc.DisplayName): $($svc.Status)" -Fore Red; $allOK = $false }
+            else { Write-Host "    [--] $s: Not found" -Fore DarkGray }
+        }
+        if (-not $allOK) { Write-Host "    >> Co the anh huong den $($dep.Name)" -Fore Yellow }
+        Write-Host ""
+    }
+}
+
+# ── [74] Windows Policy Audit ──
+function Invoke-PolicyAudit {
+    Write-Header "WINDOWS POLICY AUDIT"
+    $policies = @(
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"; Name="Windows Update Policy"},
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"; Name="Defender Policy"},
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Edge"; Name="Edge Policy"},
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Office"; Name="Office Policy"}
+    )
+    foreach ($p in $policies) {
+        if (Test-Path $p.Path) {
+            $props = (Get-ItemProperty $p.Path -EA SilentlyContinue).PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" }
+            Write-Host "  [OK] $($p.Name): $($props.Count) policies" -Fore Yellow
+        } else { Write-Host "  [--] $($p.Name): Khong co" -Fore DarkGray }
+    }
+    Write-Host ""
+}
+
+# ── [75] Registry Integrity ──
+function Invoke-RegistryIntegrity {
+    Write-Header "REGISTRY INTEGRITY CHECK"
+    $regChecks = @(
+        @{Path="HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform"; Name="SPP"},
+        @{Path="HKLM:\SOFTWARE\Microsoft\OfficeSoftwareProtectionPlatform"; Name="Office SPP"},
+        @{Path="HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate"; Name="Windows Update"},
+        @{Path="HKLM:\SOFTWARE\Microsoft\Windows Defender"; Name="Defender"}
+    )
+    foreach ($rc in $regChecks) {
+        if (Test-Path $rc.Path) {
+            $props = (Get-ItemProperty $rc.Path -EA SilentlyContinue).PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" }
+            Write-Host "  [OK] $($rc.Name): $($props.Count) values" -Fore Green
+        } else { Write-Host "  [--] $($rc.Name): Khong ton tai" -Fore DarkGray }
+    }
+    Write-Host ""
+}
+
+# ── [76] File Integrity ──
+function Invoke-FileIntegrity {
+    Write-Header "MICROSOFT FILE INTEGRITY"
+    $files = @(
+        "$env:SystemRoot\System32\sppsvc.exe",
+        "$env:SystemRoot\System32\ClipSVC.dll",
+        "$env:SystemRoot\System32\slmgr.vbs",
+        "$env:SystemRoot\System32\DISM.exe",
+        "$env:SystemRoot\System32\sfc.exe"
+    )
+    foreach ($f in $files) {
+        if (Test-Path $f) {
+            $info = Get-Item $f
+            $sig = Get-AuthenticodeSignature $f -EA SilentlyContinue
+            $sc = if ($sig.Status -eq "Valid") { "Green" } else { "Yellow" }
+            Write-Host "  [OK] $(Split-Path $f -Leaf)" -Fore $sc
+            Write-Host "       Signature: $($sig.Status) | Size: $([math]::Round($info.Length/1KB,1))KB" -Fore DarkGray
+        } else { Write-Host "  [!!] $(Split-Path $f -Leaf): Khong tim thay" -Fore Red }
+    }
+    Write-Host ""
+}
+
+# ── [77] Repair Readiness ──
+function Invoke-RepairReadiness {
+    Write-Header "REPAIR READINESS CHECK"
+    $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'" -EA SilentlyContinue
+    $freeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+    Write-Host "  Free Disk Space:     $freeGB GB $(if($freeGB -ge 10){'[OK]'}else{'[!!]'})" -Fore $(if($freeGB -ge 10){"Green"}else{"Red"})
+
+    $wu = Get-Service wuauserv -EA SilentlyContinue
+    Write-Host "  Windows Update:      $($wu.Status)" -Fore $(if($wu.Status -eq "Running"){"Green"}else{"Yellow"})
+
+    $restart = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA SilentlyContinue
+    Write-Host "  Pending Restart:     $(if($restart){'Yes [!!]'}else{'No [OK]'})" -Fore $(if($restart){"Yellow"}else{"Green"})
+
+    $sppSvc = Get-Service sppsvc -EA SilentlyContinue
+    Write-Host "  SPP Service:         $($sppSvc.Status)" -Fore $(if($sppSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    Write-Host ""
+}
+
+# ── [78] Cleanup Preview ──
+function Invoke-CleanupPreview {
+    Write-Header "CLEANUP PREVIEW"
+    Write-Host "  Cac muc se duoc don dep:" -Fore Cyan
+
+    $items = @(
+        @{Name="Windows Temp"; Path="$env:SystemRoot\Temp"},
+        @{Name="User Temp"; Path="$env:TEMP"},
+        @{Name="SoftwareDistribution"; Path="$env:SystemRoot\SoftwareDistribution\Download"},
+        @{Name="Office Cache"; Path="$env:LOCALAPPDATA\Microsoft\Office\16.0\Groove"},
+        @{Name="Edge Cache"; Path="$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache"},
+        @{Name="Defender Cache"; Path="$env:ProgramData\Microsoft\Windows Defender\Scans\History"}
+    )
+    $totalSize = 0
+    foreach ($item in $items) {
+        if (Test-Path $item.Path) {
+            $size = (Get-ChildItem $item.Path -Recurse -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            $sizeMB = [math]::Round($size / 1MB, 1)
+            $totalSize += $size
+            Write-Host "  $($item.Name): $sizeMB MB" -Fore White
+        }
+    }
+    Write-Host ""
+    Write-Host "  Tong du lieu don dep: $([math]::Round($totalSize/1MB,1)) MB" -Fore Green
+    Write-Host ""
+}
+
+# ── [79] Rollback Package ──
+function Invoke-RollbackPackage {
+    Write-Header "ROLLBACK PACKAGE"
+    $rollbackDir = Join-Path $env:TEMP "MS_Rollback_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    New-Item -ItemType Directory $rollbackDir -Force | Out-Null
+
+    Write-Step "INFO" "Tao rollback package..."
+    reg export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform" "$rollbackDir\spp.reg" /y 2>&1 | Out-Null
+    reg export "HKLM\SOFTWARE\Microsoft\OfficeSoftwareProtectionPlatform" "$rollbackDir\ospp.reg" /y 2>&1 | Out-Null
+    if (Test-Path $Script:HostsPath) { Copy-Item $Script:HostsPath "$rollbackDir\hosts" -Force }
+    & cscript //NoLogo $Script:Slmgr /dlv 2>&1 | Out-File "$rollbackDir\license.txt" -Encoding UTF8
+    systeminfo > "$rollbackDir\systeminfo.txt" 2>&1
+
+    Write-Step "OK" "Rollback package: $rollbackDir" "OK"
+    $Script:AuditReport.RollbackDir = $rollbackDir
+    Write-Host ""
+}
+
+# ── [80] Final Compliance Report ──
+function Invoke-FinalComplianceReport {
+    Write-Header "FINAL COMPLIANCE REPORT"
+    $checks = @()
+
+    function Final-Check { param([string]$Name, [bool]$Pass, [string]$Detail)
+        $icon = if ($Pass) { "PASS" } else { "FAIL" }
+        $color = if ($Pass) { "Green" } else { "Red" }
+        Write-Host "  $Name`t`t`t`t$icon" -Fore $color
+        $checks += @{Name=$Name; Pass=$Pass; Detail=$Detail}
+    }
+
+    # Collect data
+    Get-SystemInventory | Out-Null
+    Get-LicenseAudit | Out-Null
+    Test-Windows11Compatibility | Out-Null
+
+    $nt = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -EA SilentlyContinue
+    $dli = & cscript //NoLogo $Script:Slmgr /dli 2>&1
+    $ls = ""; foreach ($l in $dli) { if ($l -match "License Status:\s*(.+)") { $ls = $Matches[1].Trim() } }
+
+    try { $def = Get-MpComputerStatus -EA SilentlyContinue } catch { $def = $null }
+    try { $tpm = Get-Tpm -EA SilentlyContinue } catch { $tpm = $null }
+    try { $sb = Confirm-SecureBootUEFI -EA SilentlyContinue } catch { $sb = $false }
+    try { $bl = Get-BitLockerVolume -MountPoint $env:SystemDrive -EA SilentlyContinue } catch { $bl = $null }
+    $wu = Get-Service wuauserv -EA SilentlyContinue
+
+    Final-Check "Windows" ($ls -match "Licensed") $ls
+    Final-Check "Office" ($Script:AuditReport.Office.Count -gt 0) "$($Script:AuditReport.Office.Count) products"
+    Final-Check "Activation" ($ls -match "Licensed") $ls
+    Final-Check "Windows 11 Ready" ($Script:AuditReport.Win11Ready.Fail -eq 0) "$($Script:AuditReport.Win11Ready.Pass) pass"
+    Final-Check "Defender" ($def -and $def.AntivirusEnabled) "Enabled"
+    Final-Check "BitLocker" ($bl -and $bl.ProtectionStatus -eq "On") "Protected"
+    Final-Check "Windows Update" ($wu.Status -eq "Running") $wu.Status
+    Final-Check "TPM" ($tpm -and $tpm.TpmPresent) "Present"
+    Final-Check "Secure Boot" ($sb -eq $true) "Enabled"
+
+    $passCount = ($checks | Where-Object { $_.Pass }).Count
+    $totalCount = $checks.Count
+    $score = [math]::Round(($passCount / $totalCount) * 100)
+
+    Write-Host ""
+    Write-Host "  ==============================" -Fore Cyan
+    Write-Host "  Overall Score: $score / 100" -Fore $(if($score -ge 80){"Green"}elseif($score -ge 60){"Yellow"}else{"Red"})
+    Write-Host "  Pass: $passCount / $totalCount" -Fore White
+    Write-Host "  ==============================" -Fore Cyan
+    Write-Host ""
+}
+
+# ── WINDOWS SERVER CENTER (S1-S20) ──
+
+# [S1] Server Inventory
+function Invoke-ServerInventory {
+    Write-Header "WINDOWS SERVER INVENTORY"
+    $nt = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -EA SilentlyContinue
+    $cs = Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue
+    $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
+
+    Write-Host "  Product:       $($nt.ProductName)" -Fore White
+    Write-Host "  Edition:       $($nt.EditionID)" -Fore White
+    Write-Host "  Build:         $($nt.CurrentBuild).$($nt.UBR)" -Fore White
+    Write-Host "  Hostname:      $($cs.Name)" -Fore White
+    Write-Host "  Domain:        $($cs.Domain)" -Fore White
+    Write-Host "  Manufacturer:  $($cs.Manufacturer)" -Fore White
+    Write-Host "  Model:         $($cs.Model)" -Fore White
+    $cpu = Get-CimInstance Win32_Processor -EA SilentlyContinue | Select-Object -First 1
+    Write-Host "  CPU:           $($cpu.Name) ($($cpu.NumberOfCores) cores)" -Fore White
+    Write-Host "  RAM:           $([math]::Round($cs.TotalPhysicalMemory/1GB,1)) GB" -Fore White
+    $disks = Get-Disk -EA SilentlyContinue
+    Write-Host "  Disks:         $($disks.Count)" -Fore White
+    $nics = Get-NetAdapter -EA SilentlyContinue | Where-Object { $_.Status -eq "Up" }
+    Write-Host "  NICs:          $($nics.Count) active" -Fore White
+    Write-Host ""
+}
+
+# [S2] Server Licensing
+function Invoke-ServerLicensing {
+    Write-Header "WINDOWS SERVER LICENSING"
+    $dli = & cscript //NoLogo $Script:Slmgr /dli 2>&1
+    foreach ($l in $dli) { if ($l.Trim()) { Write-Host "  $l" -Fore White } }
+    Write-Host ""
+    $dlv = & cscript //NoLogo $Script:Slmgr /dlv 2>&1
+    foreach ($l in $dlv) {
+        if ($l -match "License Status|Product Key Channel|KMS Machine|Grace Period|Remaining|Activation ID") {
+            Write-Host "  $l" -Fore $(if($l-match "Licensed"){"Green"}elseif($l-match "KMS|Grace"){"Yellow"}else{"White"})
+        }
+    }
+    Write-Host ""
+}
+
+# [S3] Server Roles
+function Invoke-ServerRoles {
+    Write-Header "SERVER ROLES"
+    $roles = Get-WindowsFeature -EA SilentlyContinue | Where-Object { $_.Installed -eq $true -and $_.FeatureType -eq "Role" }
+    foreach ($r in $roles) { Write-Host "  [ON] $($r.DisplayName)" -Fore Green }
+    if (-not $roles) { Write-Host "  Khong co role nao (co the khong phai Server)" -Fore DarkGray }
+    Write-Host ""
+}
+
+# [S4] Server Features
+function Invoke-ServerFeatures {
+    Write-Header "SERVER FEATURES"
+    $features = Get-WindowsFeature -EA SilentlyContinue | Where-Object { $_.Installed -eq $true -and $_.FeatureType -eq "Feature" }
+    foreach ($f in $features) { Write-Host "  [ON] $($f.DisplayName)" -Fore Green }
+    if (-not $features) { Write-Host "  Khong co feature nao (co the khong phai Server)" -Fore DarkGray }
+    Write-Host ""
+}
+
+# [S5-S20] Additional server functions
+function Invoke-ServerIIS { Invoke-IISAudit }
+function Invoke-ServerHyperV { Invoke-HyperVAudit }
+function Invoke-ServerRDS {
+    Write-Header "REMOTE DESKTOP SERVICES"
+    $rdSvc = Get-Service TermService -EA SilentlyContinue
+    $rdLicense = Get-Service TermServLicensing -EA SilentlyContinue
+    Write-Host "  RDP Service:     $($rdSvc.Status)" -Fore $(if($rdSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    if ($rdLicense) { Write-Host "  RD Licensing:    $($rdLicense.Status)" -Fore White }
+    $rdp = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -EA SilentlyContinue
+    Write-Host "  NLA Required:    $(if($rdp.fDenyTSConnections -eq 0){'Enabled'}else{'Disabled'})" -Fore White
+    Write-Host ""
+}
+function Invoke-ServerDNS {
+    Write-Header "DNS SERVER"
+    $dnsSvc = Get-Service DNS -EA SilentlyContinue
+    if (-not $dnsSvc) { Write-Host "  DNS Server: Khong cai dat" -Fore DarkGray; return }
+    Write-Host "  DNS Service:     $($dnsSvc.Status)" -Fore Green
+    Import-Module DnsServer -EA SilentlyContinue
+    if (Get-Command Get-DnsServerZone -EA SilentlyContinue) {
+        $zones = Get-DnsServerZone -EA SilentlyContinue
+        Write-Host "  Zones:           $($zones.Count)" -Fore White
+        foreach ($z in $zones | Select-Object -First 10) { Write-Host "    $($z.ZoneName) [$($z.ZoneType)]" -Fore Cyan }
+    }
+    Write-Host ""
+}
+function Invoke-ServerDHCP {
+    Write-Header "DHCP SERVER"
+    $dhcpSvc = Get-Service DHCPServer -EA SilentlyContinue
+    if (-not $dhcpSvc) { Write-Host "  DHCP Server: Khong cai dat" -Fore DarkGray; return }
+    Write-Host "  DHCP Service:    $($dhcpSvc.Status)" -Fore Green
+    Write-Host ""
+}
+function Invoke-ServerAD {
+    Write-Header "ACTIVE DIRECTORY"
+    $adSvc = Get-Service NTDS -EA SilentlyContinue
+    if (-not $adSvc) { Write-Host "  AD DS: Khong cai dat" -Fore DarkGray; return }
+    Write-Host "  AD DS Service:   $($adSvc.Status)" -Fore Green
+    Import-Module ActiveDirectory -EA SilentlyContinue
+    if (Get-Command Get-ADDomain -EA SilentlyContinue) {
+        $domain = Get-ADDomain -EA SilentlyContinue
+        Write-Host "  Domain:          $($domain.DNSRoot)" -Fore White
+        Write-Host "  Forest:          $($domain.Forest)" -Fore White
+        Write-Host "  Functional Level: $($domain.DomainMode)" -Fore White
+    }
+    Write-Host ""
+}
+function Invoke-ServerStorage {
+    Write-Header "SERVER STORAGE"
+    $disks = Get-Disk -EA SilentlyContinue
+    foreach ($d in $disks) {
+        Write-Host "  Disk $($d.Number): $($d.FriendlyName) - $([math]::Round($d.Size/1GB,0))GB [$($d.PartitionStyle)] $($d.HealthStatus)" -Fore White
+    }
+    $vols = Get-Volume -EA SilentlyContinue | Where-Object { $_.DriveLetter }
+    foreach ($v in $vols) {
+        $sc = if ($v.SizeRemaining / $v.Size -lt 0.1) { "Red" } else { "Green" }
+        Write-Host "  $($v.DriveLetter): $([math]::Round($v.Size/1GB,0))GB | Free: $([math]::Round($v.SizeRemaining/1GB,1))GB" -Fore $sc
+    }
+    Write-Host ""
+}
+function Invoke-ServerNetwork {
+    Write-Header "SERVER NETWORKING"
+    $adapters = Get-NetAdapter -EA SilentlyContinue
+    foreach ($a in $adapters) {
+        $sc = if ($a.Status -eq "Up") { "Green" } else { "DarkGray" }
+        Write-Host "  $($a.Name): $($a.Status) [$($a.LinkSpeed)] $($a.MacAddress)" -Fore $sc
+    }
+    $ips = Get-NetIPAddress -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -ne "127.0.0.1" }
+    foreach ($ip in $ips) { Write-Host "  $($ip.IPAddress)/$($ip.PrefixLength) on $($ip.InterfaceAlias)" -Fore Cyan }
+    Write-Host ""
+}
+function Invoke-ServerPerformance {
+    Write-Header "SERVER PERFORMANCE"
+    $cpu = (Get-CimInstance Win32_Processor -EA SilentlyContinue | Measure-Object -Property LoadPercentage -Average).Average
+    $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
+    $ramUsed = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 1)
+    $ramTotal = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+    Write-Host "  CPU Usage:       $cpu%" -Fore $(if($cpu -lt 80){"Green"}else{"Yellow"})
+    Write-Host "  RAM Usage:       $ramUsed / $ramTotal GB" -Fore $(if($ramUsed/$ramTotal -lt 0.8){"Green"}else{"Yellow"})
+    # Top processes
+    Write-Host ""
+    Write-Host "  ── Top 5 CPU ───────────────────────────────────────────" -Fore Cyan
+    Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | ForEach-Object {
+        Write-Host "    $($_.Name): $([math]::Round($_.CPU,1))s CPU, $([math]::Round($_.WorkingSet64/1MB,1))MB RAM" -Fore White
+    }
+    Write-Host ""
+}
+function Invoke-ServerCompliance {
+    Write-Header "SERVER COMPLIANCE"
+    Invoke-ComplianceCheck
+}
+function Invoke-ServerHealth {
+    Write-Header "SERVER HEALTH"
+    Invoke-HealthCheckFull
+}
+
+# ── HOSTING PROVIDER CENTER (H1-H10) ──
+
+function Invoke-HostingVPSAudit {
+    Write-Header "VPS AUDIT"
+    $cs = Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue
+    Write-Host "  Hostname:        $($cs.Name)" -Fore White
+    Write-Host "  Manufacturer:    $($cs.Manufacturer)" -Fore White
+    Write-Host "  Model:           $($cs.Model)" -Fore White
+    # VM detection
+    $isVM = $cs.Model -match "Virtual|VMware|Hyper-V|QEMU|KVM|Xen"
+    Write-Host "  Virtual Machine: $(if($isVM){'Yes'}else{'No'})" -Fore $(if($isVM){"Yellow"}else{"Green"})
+    # Integration Services
+    try {
+        $hvSvc = Get-Service vmicheartbeat -EA SilentlyContinue
+        if ($hvSvc) { Write-Host "  Hyper-V IS:      $($hvSvc.Status)" -Fore White }
+    } catch {}
+    Write-Host ""
+}
+
+function Invoke-HostingSQLAudit {
+    Write-Header "HOSTING SQL AUDIT"
+    $sqlServices = Get-Service *sql* -EA SilentlyContinue
+    if ($sqlServices) {
+        foreach ($s in $sqlServices) {
+            Write-Host "  $($s.DisplayName): $($s.Status)" -Fore $(if($s.Status -eq "Running"){"Green"}else{"Yellow"})
+        }
+    } else { Write-Host "  SQL Server: Khong cai dat" -Fore DarkGray }
+    Write-Host ""
+}
+
+function Invoke-HostingSecurity {
+    Write-Header "HOSTING SECURITY AUDIT"
+    # SMBv1
+    $smb1 = Get-SmbServerConfiguration -EA SilentlyContinue
+    Write-Host "  SMBv1:           $(if($smb1.EnableSMB1Protocol){'Enabled [!!]'}else{'Disabled [OK]'})" -Fore $(if($smb1.EnableSMB1Protocol){"Red"}else{"Green"})
+    # TLS
+    $tls = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server" -EA SilentlyContinue
+    Write-Host "  TLS 1.2:         $(if($tls.Enabled -ne 0){'Enabled'}else{'Check'})" -Fore White
+    # RDP NLA
+    $rdp = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -EA SilentlyContinue
+    Write-Host "  RDP NLA:         $(if($rdp.UserAuthentication -eq 1){'Required'}else{'Not Required'})" -Fore $(if($rdp.UserAuthentication -eq 1){"Green"}else{"Yellow"})
+    Write-Host ""
+}
+
+function Invoke-HostingWebAudit {
+    Write-Header "WEB HOSTING AUDIT"
+    Invoke-IISAudit
+}
+
+function Invoke-HostingBackupAudit {
+    Write-Header "BACKUP AUDIT"
+    $wbSvc = Get-Service wbengine -EA SilentlyContinue
+    if ($wbSvc) { Write-Host "  Windows Backup:  $($wbSvc.Status)" -Fore White }
+    # VSS
+    $vssSvc = Get-Service VSS -EA SilentlyContinue
+    Write-Host "  VSS Service:     $($vssSvc.Status)" -Fore $(if($vssSvc.Status -eq "Running"){"Green"}else{"Yellow"})
+    Write-Host ""
+}
+
+function Invoke-HostingMigration {
+    Write-Header "HOSTING MIGRATION & READINESS"
+    $nt = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -EA SilentlyContinue
+    $build = [int]$nt.CurrentBuild
+
+    Write-Host "  Current OS:      $($nt.ProductName)" -Fore White
+    Write-Host "  Build:           $($nt.CurrentBuild).$($nt.UBR)" -Fore White
+
+    # End of support check
+    $eosDates = @{
+        "2019" = "2029-01-09"; "2022" = "2031-10-14"; "2025" = "2034-10-10"
+    }
+    foreach ($ver in $eosDates.Keys) {
+        if ($nt.ProductName -match $ver) {
+            $eosDate = [datetime]::Parse($eosDates[$ver])
+            $daysLeft = ($eosDate - (Get-Date)).Days
+            $sc = if ($daysLeft -gt 365) { "Green" } elseif ($daysLeft -gt 0) { "Yellow" } else { "Red" }
+            Write-Host "  End of Support:  $($eosDates[$ver]) ($daysLeft days)" -Fore $sc
+        }
+    }
+
+    # Upgrade readiness
+    Write-Host ""
+    Write-Host "  ── Upgrade Readiness ───────────────────────────────────" -Fore Cyan
+    if ($nt.ProductName -match "2019|2022") {
+        Write-Host "  Co the nang cap len Windows Server 2025" -Fore Green
+    }
+    if ($nt.ProductName -match "2025") {
+        Write-Host "  Da la phien ban moi nhat" -Fore Green
+    }
+    Write-Host ""
+}
+
+# ============================================================
+#  OPTIMIZATION CENTER
+# ============================================================
+
+function Invoke-OptimizationCenter {
+    Write-Header "OPTIMIZATION CENTER"
+    Write-Host "  Chon nhom toi uu:" -Fore Cyan
+    Write-Host "    [1]  Microsoft Apps Manager" -Fore White
+    Write-Host "    [2]  OneDrive Manager" -Fore White
+    Write-Host "    [3]  Windows Update Manager" -Fore White
+    Write-Host "    [4]  Defender Manager" -Fore White
+    Write-Host "    [5]  Startup Manager" -Fore White
+    Write-Host "    [6]  Privacy Settings" -Fore White
+    Write-Host "    [7]  Performance Tuning" -Fore White
+    Write-Host "    [8]  Explorer Tweaks" -Fore White
+    Write-Host "    [9]  Storage Cleanup" -Fore White
+    Write-Host "    [10] Windows Feature Manager" -Fore White
+    Write-Host "    [0]  Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { Invoke-AppsManager }
+        "2" { Invoke-OneDriveManager }
+        "3" { Invoke-WUManager }
+        "4" { Invoke-DefenderManager }
+        "5" { Invoke-StartupManager }
+        "6" { Invoke-PrivacySettings }
+        "7" { Invoke-PerformanceTuning }
+        "8" { Invoke-ExplorerTweaks }
+        "9" { Invoke-StorageCleanup }
+        "10" { Invoke-FeatureManager }
+    }
+}
+
+function Invoke-AppsManager {
+    Write-Header "MICROSOFT APPS MANAGER"
+    $removableApps = @(
+        "Microsoft.549981C3F5F10","Microsoft.BingNews","Microsoft.BingWeather",
+        "Microsoft.GamingApp","Microsoft.GetHelp","Microsoft.Getstarted",
+        "Microsoft.MicrosoftOfficeHub","Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.People","Microsoft.SkypeApp","Microsoft.Todos",
+        "Microsoft.WindowsMaps","Microsoft.WindowsFeedbackHub",
+        "Microsoft.ZuneMusic","Microsoft.ZuneVideo","Clipchamp.Clipchamp",
+        "Microsoft.PowerAutomateDesktop","Microsoft.QuickAssist",
+        "MicrosoftTeams","Microsoft.OutlookForWindows","Microsoft.Windows.DevHome",
+        "Microsoft.WindowsAlarms","Microsoft.MicrosoftStickyNotes"
+    )
+    Write-Host "  Chon app de go bo (dau phay cach nhau, hoac 'all'):" -Fore Yellow
+    $n = 0
+    foreach ($app in $removableApps) {
+        $installed = Get-AppxPackage -AllUsers "*$app*" -EA SilentlyContinue
+        if ($installed) {
+            $n++
+            Write-Host "    [$n] $app ($($installed.Version))" -Fore White
+        }
+    }
+    if ($n -eq 0) { Write-Host "  Khong co app nao de go" -Fore DarkGray; return }
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    if ($ch -eq "0" -or $ch -eq "") { return }
+
+    if ($ch -eq "all") {
+        foreach ($app in $removableApps) {
+            Get-AppxPackage -AllUsers "*$app*" | Remove-AppxPackage -AllUsers -EA SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -match $app } | Remove-AppxProvisionedPackage -Online -EA SilentlyContinue
+        }
+        Write-Step "OK" "Da go tat ca apps" "OK"
+    } else {
+        $idxs = $ch -split "[,\s]+" | ForEach-Object { [int]$_ - 1 }
+        $installedApps = $removableApps | Where-Object { Get-AppxPackage -AllUsers "*$_*" -EA SilentlyContinue }
+        foreach ($i in $idxs) {
+            if ($i -ge 0 -and $i -lt $installedApps.Count) {
+                $appName = $installedApps[$i]
+                Get-AppxPackage -AllUsers "*$appName*" | Remove-AppxPackage -AllUsers -EA SilentlyContinue
+                Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -match $appName } | Remove-AppxProvisionedPackage -Online -EA SilentlyContinue
+                Write-Step "DEL" "Da go: $appName" "DEL"
+            }
+        }
+    }
+    Write-Host ""
+}
+
+function Invoke-OneDriveManager {
+    Write-Header "ONEDRIVE MANAGER"
+    Write-Host "    [1] Disable Auto Start" -Fore White
+    Write-Host "    [2] Enable Auto Start" -Fore White
+    Write-Host "    [3] Reset OneDrive" -Fore White
+    Write-Host "    [4] Install Latest Version" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { Remove-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -Force -EA SilentlyContinue; Write-Step "OK" "Da tat auto start" "OK" }
+        "2" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -Value "`"$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe`" /background" -EA SilentlyContinue; Write-Step "OK" "Da bat auto start" "OK" }
+        "3" { & "$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe" /reset 2>&1 | Out-Null; Write-Step "OK" "Da reset OneDrive" "OK" }
+        "4" { Start-Process "https://www.microsoft.com/en-us/microsoft-365/onedrive/download" }
+    }
+    Write-Host ""
+}
+
+function Invoke-WUManager {
+    Write-Header "WINDOWS UPDATE MANAGER"
+    Write-Host "    [1] Check for Updates" -Fore White
+    Write-Host "    [2] Clear Update Cache" -Fore White
+    Write-Host "    [3] Repair Windows Update" -Fore White
+    Write-Host "    [4] Show Installed Updates" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { Start-Process "ms-settings:windowsupdate-action"; Write-Step "OK" "Da mo Windows Update" "OK" }
+        "2" {
+            Stop-Service wuauserv,bits -Force -EA SilentlyContinue
+            Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -EA SilentlyContinue
+            Start-Service wuauserv,bits -EA SilentlyContinue
+            Write-Step "OK" "Da xoa update cache" "OK"
+        }
+        "3" { Invoke-RepairCenter }
+        "4" { Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 20 | Format-Table HotFixID, Description, InstalledOn -AutoSize }
+    }
+    Write-Host ""
+}
+
+function Invoke-DefenderManager {
+    Write-Header "DEFENDER MANAGER"
+    Write-Host "    [1] Health Check" -Fore White
+    Write-Host "    [2] Update Signatures" -Fore White
+    Write-Host "    [3] Quick Scan" -Fore White
+    Write-Host "    [4] Full Scan" -Fore White
+    Write-Host "    [5] Repair Defender" -Fore White
+    Write-Host "    [6] Restore Default Settings" -Fore White
+    Write-Host "    [7] Remove Invalid Exclusions" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { $def = Get-MpComputerStatus -EA SilentlyContinue; $def | Format-List AntivirusEnabled, RealTimeProtectionEnabled, TamperProtection, AntivirusSignatureLastUpdated }
+        "2" { Update-MpSignature; Write-Step "OK" "Da cap nhat signatures" "OK" }
+        "3" { Start-MpScan -ScanType QuickScan; Write-Step "OK" "Quick scan hoan tat" "OK" }
+        "4" { Start-MpScan -ScanType FullScan; Write-Step "OK" "Full scan hoan tat" "OK" }
+        "5" { & "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -RemoveDefinitions -All 2>&1 | Out-Null; Update-MpSignature; Write-Step "OK" "Da repair Defender" "OK" }
+        "6" { Remove-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "*" -Force -EA SilentlyContinue; Write-Step "OK" "Da khoi phuc mac dinh" "OK" }
+        "7" { $mp = Get-MpPreference -EA SilentlyContinue; if ($mp.ExclusionPath) { foreach ($ex in $mp.ExclusionPath) { Remove-MpPreference -ExclusionPath $ex -EA SilentlyContinue; Write-Step "DEL" "Da xoa: $ex" "DEL" } } }
+    }
+    Write-Host ""
+}
+
+function Invoke-StartupManager {
+    Write-Header "STARTUP MANAGER"
+    $startupPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    )
+    foreach ($sp in $startupPaths) {
+        if (Test-Path $sp) {
+            $props = Get-ItemProperty $sp -EA SilentlyContinue
+            Write-Host "  ── $(Split-Path $sp -Leaf) ─────────────────────────────" -Fore Cyan
+            foreach ($prop in $props.PSObject.Properties) {
+                if ($prop.Name -notmatch "^PS") { Write-Host "    $($prop.Name): $($prop.Value)" -Fore White }
+            }
+        }
+    }
+    Write-Host ""
+}
+
+function Invoke-PrivacySettings {
+    Write-Header "PRIVACY SETTINGS"
+    Write-Host "    [1] Disable Advertising ID" -Fore White
+    Write-Host "    [2] Disable Activity History" -Fore White
+    Write-Host "    [3] Disable Telemetry" -Fore White
+    Write-Host "    [4] Disable Tailored Experience" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0 -EA SilentlyContinue; Write-Step "OK" "Da tat Advertising ID" "OK" }
+        "2" { Set-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "EnableActivityFeed" -Value 0 -EA SilentlyContinue; Write-Step "OK" "Da tat Activity History" "OK" }
+        "3" { Set-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -Value 0 -EA SilentlyContinue; Write-Step "OK" "Da giam telemetry" "OK" }
+        "4" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338393Enabled" -Value 0 -EA SilentlyContinue; Write-Step "OK" "Da tat Tailored Experience" "OK" }
+    }
+    Write-Host ""
+}
+
+function Invoke-PerformanceTuning {
+    Write-Header "PERFORMANCE TUNING"
+    Write-Host "    [1] High Performance Power Plan" -Fore White
+    Write-Host "    [2] Disable Visual Effects" -Fore White
+    Write-Host "    [3] Enable Storage Sense" -Fore White
+    Write-Host "    [4] Disable Hibernation" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { & powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>&1 | Out-Null; Write-Step "OK" "Da chuyen High Performance" "OK" }
+        "2" { Set-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -EA SilentlyContinue; Write-Step "OK" "Da tat visual effects" "OK" }
+        "3" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" -Name "01" -Value 1 -EA SilentlyContinue; Write-Step "OK" "Da bat Storage Sense" "OK" }
+        "4" { & powercfg /hibernate off 2>&1 | Out-Null; Write-Step "OK" "Da tat hibernation" "OK" }
+    }
+    Write-Host ""
+}
+
+function Invoke-ExplorerTweaks {
+    Write-Header "EXPLORER TWEAKS"
+    Write-Host "    [1] Show File Extensions" -Fore White
+    Write-Host "    [2] Show Hidden Files" -Fore White
+    Write-Host "    [3] Classic Context Menu (Win11)" -Fore White
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    switch ($ch) {
+        "1" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "HideFileExt" -Value 0; Write-Step "OK" "Da hien file extension" "OK" }
+        "2" { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Hidden" -Value 1; Write-Step "OK" "Da hien hidden files" "OK" }
+        "3" { New-Item -Path "HKCU:\SOFTWARE\Classes\CLSID\{86ca1aa0-a74e-4293-abe8-d26b6e0e8f5d}\InprocServer32" -Force -EA SilentlyContinue | Out-Null; Write-Step "OK" "Da chuyen classic context menu" "OK" }
+    }
+    Write-Host ""
+}
+
+function Invoke-StorageCleanup {
+    Write-Header "STORAGE CLEANUP"
+    $items = @(
+        @{Name="Windows Temp"; Path="$env:SystemRoot\Temp"},
+        @{Name="User Temp"; Path="$env:TEMP"},
+        @{Name="Prefetch"; Path="$env:SystemRoot\Prefetch"},
+        @{Name="Thumbnail Cache"; Path="$env:LOCALAPPDATA\Microsoft\Windows\Explorer"},
+        @{Name="WU Download"; Path="$env:SystemRoot\SoftwareDistribution\Download"},
+        @{Name="Office Cache"; Path="$env:LOCALAPPDATA\Microsoft\Office\16.0\Groove"},
+        @{Name="Edge Cache"; Path="$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache"},
+        @{Name="OneDrive Cache"; Path="$env:LOCALAPPDATA\Microsoft\OneDrive\logs"},
+        @{Name="Defender Cache"; Path="$env:ProgramData\Microsoft\Windows Defender\Scans\History"}
+    )
+    $totalFreed = 0
+    foreach ($item in $items) {
+        if (Test-Path $item.Path) {
+            $size = (Get-ChildItem $item.Path -Recurse -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            $sizeMB = [math]::Round($size / 1MB, 1)
+            Write-Host "  $($item.Name): $sizeMB MB" -Fore White
+            $totalFreed += $size
+        }
+    }
+    Write-Host ""
+    Write-Host "  Tong: $([math]::Round($totalFreed/1MB,1)) MB" -Fore Green
+    Write-Host ""
+    if (Confirm-Proceed "Xoa tat ca?") {
+        foreach ($item in $items) {
+            if (Test-Path $item.Path) { Remove-Item "$($item.Path)\*" -Recurse -Force -EA SilentlyContinue }
+        }
+        Write-Step "OK" "Da don dep" "OK"
+    }
+    Write-Host ""
+}
+
+function Invoke-FeatureManager {
+    Write-Header "WINDOWS FEATURE MANAGER"
+    $features = Get-WindowsOptionalFeature -Online -EA SilentlyContinue
+    Write-Host "  Chon feature de bat/tat:" -Fore Yellow
+    $n = 0
+    $featList = $features | Select-Object -First 30
+    foreach ($f in $featList) {
+        $n++
+        $sc = if ($f.State -eq "Enabled") { "Green" } else { "DarkGray" }
+        Write-Host "    [$n] $($f.FeatureName): $($f.State)" -Fore $sc
+    }
+    Write-Host "    [0] Bo qua" -Fore Red
+    Write-Host ""
+    $ch = Read-Host "  Chon"
+    if ($ch -ne "0" -and $ch -ne "") {
+        $idx = [int]$ch - 1
+        if ($idx -ge 0 -and $idx -lt $featList.Count) {
+            $selected = $featList[$idx]
+            if ($selected.State -eq "Enabled") {
+                Disable-WindowsOptionalFeature -Online -FeatureName $selected.FeatureName -NoRestart -EA SilentlyContinue
+                Write-Step "OK" "Da tat: $($selected.FeatureName)" "OK"
+            } else {
+                Enable-WindowsOptionalFeature -Online -FeatureName $selected.FeatureName -NoRestart -EA SilentlyContinue
+                Write-Step "OK" "Da bat: $($selected.FeatureName)" "OK"
+            }
+        }
+    }
+    Write-Host ""
+}
+
+# ============================================================
 #  CHUC NANG THEO TUNG SAN PHAM
 # ============================================================
 
@@ -5888,6 +7095,38 @@ function Show-Menu {
         Write-Host "   [MK] " -NoNewline; Write-Host "Report Generator" -Fore Green
         Write-Host "   [ML] " -NoNewline; Write-Host "Quick Actions (1-touch)" -Fore Green
         Write-Host ""
+        Write-Host "   --- WINDOWS SERVER ---" -Fore Yellow
+        Write-Host "   [SV1] " -NoNewline; Write-Host "Server Inventory" -Fore Green
+        Write-Host "   [SV2] " -NoNewline; Write-Host "Server Licensing" -Fore Green
+        Write-Host "   [SV3] " -NoNewline; Write-Host "Server Roles" -Fore Green
+        Write-Host "   [SV4] " -NoNewline; Write-Host "Server Features" -Fore Green
+        Write-Host "   [SV5] " -NoNewline; Write-Host "IIS Manager" -Fore Green
+        Write-Host "   [SV6] " -NoNewline; Write-Host "Hyper-V Audit" -Fore Green
+        Write-Host "   [SV7] " -NoNewline; Write-Host "RDS / DNS / DHCP / AD" -Fore Green
+        Write-Host "   [SV8] " -NoNewline; Write-Host "Server Storage & Network" -Fore Green
+        Write-Host "   [SV9] " -NoNewline; Write-Host "Server Performance" -Fore Green
+        Write-Host "   [SVA] " -NoNewline; Write-Host "Server Health & Compliance" -Fore Green
+        Write-Host ""
+        Write-Host "   --- HOSTING PROVIDER ---" -Fore Yellow
+        Write-Host "   [H1] " -NoNewline; Write-Host "VPS Audit" -Fore Green
+        Write-Host "   [H2] " -NoNewline; Write-Host "Hosting SQL Audit" -Fore Green
+        Write-Host "   [H3] " -NoNewline; Write-Host "Hosting Security (TLS/SMB/NLA)" -Fore Green
+        Write-Host "   [H4] " -NoNewline; Write-Host "Web Hosting (IIS)" -Fore Green
+        Write-Host "   [H5] " -NoNewline; Write-Host "Backup Audit (VSS)" -Fore Green
+        Write-Host "   [H6] " -NoNewline; Write-Host "Migration & Readiness" -Fore Green
+        Write-Host ""
+        Write-Host "   --- OPTIMIZATION ---" -Fore Yellow
+        Write-Host "   [X1] " -NoNewline; Write-Host "Optimization Center (Apps/Privacy/Perf)" -Fore Green
+        Write-Host "   [X2] " -NoNewline; Write-Host "Windows Installation Audit" -Fore Green
+        Write-Host "   [X3] " -NoNewline; Write-Host "Component Store Audit" -Fore Green
+        Write-Host "   [X4] " -NoNewline; Write-Host "Feature Audit" -Fore Green
+        Write-Host "   [X5] " -NoNewline; Write-Host "Store Apps Audit" -Fore Green
+        Write-Host "   [X6] " -NoNewline; Write-Host "Edge / OneDrive / Teams / Outlook" -Fore Green
+        Write-Host "   [X7] " -NoNewline; Write-Host "Office Details (Apps/Channel/Lang)" -Fore Green
+        Write-Host "   [X8] " -NoNewline; Write-Host "VS / SQL Components" -Fore Green
+        Write-Host "   [X9] " -NoNewline; Write-Host "WSL / Sandbox / Containers" -Fore Green
+        Write-Host "   [XA] " -NoNewline; Write-Host "Final Compliance Report (Score)" -Fore Green
+        Write-Host ""
         Write-Host "   [L]  Ngon ngu / Language" -Fore Cyan
         Write-Host "   [0]  Thoat / Exit" -Fore Red
         Write-Host ""
@@ -6011,6 +7250,61 @@ function Show-Menu {
             "mk" { Invoke-ReportGenerator }
             "ML" { Invoke-QuickActions }
             "ml" { Invoke-QuickActions }
+            # Windows Server
+            "SV1" { Invoke-ServerInventory }
+            "sv1" { Invoke-ServerInventory }
+            "SV2" { Invoke-ServerLicensing }
+            "sv2" { Invoke-ServerLicensing }
+            "SV3" { Invoke-ServerRoles }
+            "sv3" { Invoke-ServerRoles }
+            "SV4" { Invoke-ServerFeatures }
+            "sv4" { Invoke-ServerFeatures }
+            "SV5" { Invoke-ServerIIS }
+            "sv5" { Invoke-ServerIIS }
+            "SV6" { Invoke-ServerHyperV }
+            "sv6" { Invoke-ServerHyperV }
+            "SV7" { Invoke-ServerRDS; Invoke-ServerDNS; Invoke-ServerDHCP; Invoke-ServerAD }
+            "sv7" { Invoke-ServerRDS; Invoke-ServerDNS; Invoke-ServerDHCP; Invoke-ServerAD }
+            "SV8" { Invoke-ServerStorage; Invoke-ServerNetwork }
+            "sv8" { Invoke-ServerStorage; Invoke-ServerNetwork }
+            "SV9" { Invoke-ServerPerformance }
+            "sv9" { Invoke-ServerPerformance }
+            "SVA" { Invoke-ServerHealth }
+            "sva" { Invoke-ServerHealth }
+            # Hosting Provider
+            "H1" { Invoke-HostingVPSAudit }
+            "h1" { Invoke-HostingVPSAudit }
+            "H2" { Invoke-HostingSQLAudit }
+            "h2" { Invoke-HostingSQLAudit }
+            "H3" { Invoke-HostingSecurity }
+            "h3" { Invoke-HostingSecurity }
+            "H4" { Invoke-HostingWebAudit }
+            "h4" { Invoke-HostingWebAudit }
+            "H5" { Invoke-HostingBackupAudit }
+            "h5" { Invoke-HostingBackupAudit }
+            "H6" { Invoke-HostingMigration }
+            "h6" { Invoke-HostingMigration }
+            # Optimization
+            "X1" { Invoke-OptimizationCenter }
+            "x1" { Invoke-OptimizationCenter }
+            "X2" { Invoke-WindowsInstallationAudit }
+            "x2" { Invoke-WindowsInstallationAudit }
+            "X3" { Invoke-ComponentStore }
+            "x3" { Invoke-ComponentStore }
+            "X4" { Invoke-FeatureAudit }
+            "x4" { Invoke-FeatureAudit }
+            "X5" { Invoke-StoreApps }
+            "x5" { Invoke-StoreApps }
+            "X6" { Invoke-EdgeAudit; Invoke-OneDriveAudit; Invoke-TeamsAudit; Invoke-OutlookAudit }
+            "x6" { Invoke-EdgeAudit; Invoke-OneDriveAudit; Invoke-TeamsAudit; Invoke-OutlookAudit }
+            "X7" { Invoke-OfficeDetailsAudit }
+            "x7" { Invoke-OfficeDetailsAudit }
+            "X8" { Invoke-VSComponents; Invoke-SQLComponents }
+            "x8" { Invoke-VSComponents; Invoke-SQLComponents }
+            "X9" { Invoke-WSLAudit; Invoke-SandboxAudit; Invoke-ContainersAudit }
+            "x9" { Invoke-WSLAudit; Invoke-SandboxAudit; Invoke-ContainersAudit }
+            "XA" { Invoke-FinalComplianceReport }
+            "xa" { Invoke-FinalComplianceReport }
             # Ngon ngu
             "L"  { Select-Language }
             "l"  { Select-Language }
